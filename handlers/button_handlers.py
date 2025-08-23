@@ -23,11 +23,11 @@ logger = logging.getLogger(__name__)
 
 def add_account_handler(window):
     """添加账号处理函数"""
-    from .main_account_dialog import MainAccountDialog
-    dialog = MainAccountDialog(window)
+    from ui.dialogs import AccountDialog
+    dialog = AccountDialog(window)
     dialog.setWindowTitle("添加账号")
     
-    if dialog.exec() == QDialog.Accepted:
+    if dialog.exec() == QDialog.DialogCode.Accepted:
         account_data = dialog.get_data()
         if account_data:
             # 检查用户名是否已存在
@@ -89,8 +89,8 @@ def edit_account_handler(window):
         QMessageBox.warning(window, "错误", "未找到选中的账号")
         return
     
-    from .main_account_dialog import MainAccountDialog
-    dialog = MainAccountDialog(window, {
+    from ui.dialogs import AccountDialog
+    dialog = AccountDialog(window, {
         'username': account_info[1],
         'password': account_info[2],
         'ck': account_info[3],
@@ -100,7 +100,7 @@ def edit_account_handler(window):
     })
     dialog.setWindowTitle("编辑账号")
     
-    if dialog.exec() == QDialog.Accepted:
+    if dialog.exec() == QDialog.DialogCode.Accepted:
         updated_data = dialog.get_data()
         if updated_data:
             # 更新账号信息
@@ -116,7 +116,7 @@ def delete_account_handler(window):
     selected_rows = set()
     for row in range(window.account_table.rowCount()):
         checkbox_item = window.account_table.item(row, 0)
-        if checkbox_item and checkbox_item.checkState() == Qt.Checked:
+        if checkbox_item and checkbox_item.checkState() == Qt.CheckState.Checked:
             selected_rows.add(row)
     
     if not selected_rows:
@@ -126,9 +126,9 @@ def delete_account_handler(window):
     # 确认删除
     reply = QMessageBox.question(window, "确认删除", 
                                f"确定要删除选中的 {len(selected_rows)} 个账号吗？\n此操作不可恢复！",
-                               QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                               QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
     
-    if reply == QMessageBox.Yes:
+    if reply == QMessageBox.StandardButton.Yes:
         deleted_count = 0
         for row in sorted(selected_rows, reverse=True):
             try:
@@ -214,7 +214,7 @@ def add_proxy_handler(window):
     ok_button.clicked.connect(dialog.accept)
     cancel_button.clicked.connect(dialog.reject)
     
-    if dialog.exec() == QDialog.Accepted:
+    if dialog.exec() == QDialog.DialogCode.Accepted:
         proxy = proxy_input.text()
         if proxy:
             success_count = 0
@@ -276,7 +276,7 @@ def remove_proxy_handler(window):
     
     # 确认删除
     reply = QMessageBox.question(window, "确认删除", "确定要删除该账号的代理吗？")
-    if reply == QMessageBox.Yes:
+    if reply == QMessageBox.StandardButton.Yes:
         # 清除代理信息
         account_data[row]['proxy'] = ''
         
@@ -292,7 +292,7 @@ def remove_proxy_handler(window):
 def clear_all_movies_handler(window):
     """清空所有电影处理函数"""
     reply = QMessageBox.question(window, "确认清空", "确定要清空所有电影数据吗？此操作不可恢复！")
-    if reply == QMessageBox.Yes:
+    if reply == QMessageBox.StandardButton.Yes:
         # 清空指定电影
         if window.data_manager.save_movies([], 'specific'):
             window.movie_specific_table.setRowCount(0)
@@ -306,7 +306,7 @@ def clear_all_movies_handler(window):
 def clear_all_contents_handler(window):
     """清空所有内容处理函数"""
     reply = QMessageBox.question(window, "确认清空", "确定要清空所有内容数据吗？此操作不可恢复！")
-    if reply == QMessageBox.Yes:
+    if reply == QMessageBox.StandardButton.Yes:
         # 清空指定内容
         if window.data_manager.save_contents([], 'specific'):
             window.content_specific_table.setRowCount(0)
@@ -320,7 +320,7 @@ def clear_all_contents_handler(window):
 def clear_specific_movies_handler(window):
     """清空指定电影处理函数"""
     reply = QMessageBox.question(window, "确认清空", "确定要清空所有指定电影数据吗？此操作不可恢复！")
-    if reply == QMessageBox.Yes:
+    if reply == QMessageBox.StandardButton.Yes:
         if window.data_manager.save_movies([], 'specific'):
             window.movie_specific_table.setRowCount(0)
             QMessageBox.information(window, "成功", "指定电影数据已清空")
@@ -328,7 +328,7 @@ def clear_specific_movies_handler(window):
 def clear_random_movies_handler(window):
     """清空随机电影处理函数"""
     reply = QMessageBox.question(window, "确认清空", "确定要清空所有随机电影数据吗？此操作不可恢复！")
-    if reply == QMessageBox.Yes:
+    if reply == QMessageBox.StandardButton.Yes:
         if window.data_manager.save_movies([], 'random'):
             window.movie_random_table.setRowCount(0)
             QMessageBox.information(window, "成功", "随机电影数据已清空")
@@ -336,7 +336,7 @@ def clear_random_movies_handler(window):
 def clear_specific_contents_handler(window):
     """清空指定内容处理函数"""
     reply = QMessageBox.question(window, "确认清空", "确定要清空所有指定内容数据吗？此操作不可恢复！")
-    if reply == QMessageBox.Yes:
+    if reply == QMessageBox.StandardButton.Yes:
         if window.data_manager.save_contents([], 'specific'):
             window.content_specific_table.setRowCount(0)
             QMessageBox.information(window, "成功", "指定内容数据已清空")
@@ -344,7 +344,7 @@ def clear_specific_contents_handler(window):
 def clear_random_contents_handler(window):
     """清空随机内容处理函数"""
     reply = QMessageBox.question(window, "确认清空", "确定要清空所有随机内容数据吗？此操作不可恢复！")
-    if reply == QMessageBox.Yes:
+    if reply == QMessageBox.StandardButton.Yes:
         if window.data_manager.save_contents([], 'random'):
             window.content_random_table.setRowCount(0)
             QMessageBox.information(window, "成功", "随机内容数据已清空")
@@ -449,12 +449,12 @@ def add_movie_handler(window, movie_type):
     layout.addRow("统一星级:", rating_layout)
     
     # 添加按钮
-    buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+    buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
     buttons.accepted.connect(dialog.accept)
     buttons.rejected.connect(dialog.reject)
     layout.addWidget(buttons)
     
-    if dialog.exec() == QDialog.Accepted:
+    if dialog.exec() == QDialog.DialogCode.Accepted:
         movie_text = movie_edit.toPlainText().strip()
         
         if not movie_text:
@@ -539,8 +539,8 @@ def add_movie_handler(window, movie_type):
             if new_movies:
                 error_msg += f"\n\n将添加 {len(new_movies)} 个有效电影，是否继续？"
                 reply = QMessageBox.question(window, "警告", error_msg, 
-                                           QMessageBox.Yes | QMessageBox.No)
-                if reply != QMessageBox.Yes:
+                                           QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                if reply != QMessageBox.StandardButton.Yes:
                     return
             else:
                 QMessageBox.warning(window, "错误", error_msg)
@@ -582,7 +582,7 @@ def delete_movie_handler(window):
         movie_id = table.item(row, 1).text()
     
     reply = QMessageBox.question(window, "确认删除", f"确定要删除电影 '{movie_id}' 吗？")
-    if reply == QMessageBox.Yes:
+    if reply == QMessageBox.StandardButton.Yes:
         # 获取现有电影数据
         movies = window.data_manager.load_movies(movie_type)
         if movies is None:
@@ -625,7 +625,7 @@ def delete_movies_batch_handler(window):
         return
     
     reply = QMessageBox.question(window, "确认删除", f"确定要删除选中的 {len(selected_rows)} 部电影吗？")
-    if reply == QMessageBox.Yes:
+    if reply == QMessageBox.StandardButton.Yes:
         # 获取现有电影数据
         movies = window.data_manager.load_movies(movie_type)
         if movies is None:
@@ -666,12 +666,12 @@ def add_content_handler(window, content_type):
     layout.addRow("内容列表:", content_edit)
     
     # 添加按钮
-    buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+    buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
     buttons.accepted.connect(dialog.accept)
     buttons.rejected.connect(dialog.reject)
     layout.addWidget(buttons)
     
-    if dialog.exec() == QDialog.Accepted:
+    if dialog.exec() == QDialog.DialogCode.Accepted:
         content_text = content_edit.toPlainText().strip()
         
         if not content_text:
@@ -720,8 +720,8 @@ def add_content_handler(window, content_type):
             if new_contents:
                 error_msg += f"\n\n将添加 {len(new_contents)} 个有效内容，是否继续？"
                 reply = QMessageBox.question(window, "警告", error_msg, 
-                                           QMessageBox.Yes | QMessageBox.No)
-                if reply != QMessageBox.Yes:
+                                           QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                if reply != QMessageBox.StandardButton.Yes:
                     return
             else:
                 QMessageBox.warning(window, "错误", error_msg)
@@ -763,7 +763,7 @@ def delete_content_handler(window):
         content = table.item(row, 1).text()
     
     reply = QMessageBox.question(window, "确认删除", f"确定要删除该内容吗？")
-    if reply == QMessageBox.Yes:
+    if reply == QMessageBox.StandardButton.Yes:
         # 获取现有内容数据
         contents = window.data_manager.load_contents(content_type)
         if contents is None:
@@ -806,7 +806,7 @@ def delete_contents_batch_handler(window):
         return
     
     reply = QMessageBox.question(window, "确认删除", f"确定要删除选中的 {len(selected_rows)} 条内容吗？")
-    if reply == QMessageBox.Yes:
+    if reply == QMessageBox.StandardButton.Yes:
         # 获取现有内容数据
         contents = window.data_manager.load_contents(content_type)
         if contents is None:
@@ -878,12 +878,12 @@ def update_movie_rating_handler(window):
     layout.addRow("选择星级:", rating_combo)
     
     # 添加按钮
-    buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+    buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
     buttons.accepted.connect(dialog.accept)
     buttons.rejected.connect(dialog.reject)
     layout.addWidget(buttons)
     
-    if dialog.exec() == QDialog.Accepted:
+    if dialog.exec() == QDialog.DialogCode.Accepted:
         # 获取选择的星级
         rating_text = rating_combo.currentText()
         

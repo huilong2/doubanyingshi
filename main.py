@@ -15,6 +15,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, QObject, QTimer
 from PySide6.QtGui import QIcon
+# 导入枚举值
+from PySide6.QtWidgets import QAbstractItemView, QSizePolicy
 from data_manager import DataManager
 from pathlib import Path
 from mokuai_chagyong import chagyong_load_config, chagyong_save_config
@@ -37,6 +39,8 @@ from handlers.button_handlers import (
     add_content_handler, delete_content_handler, delete_contents_batch_handler,
     update_movie_rating_handler
 )
+# 导入统一的UI组件
+from ui.dialogs import BaseDialog, AccountDialog, GroupDialog
 
 # 配置日志
 def setup_logging():
@@ -95,158 +99,11 @@ quan_shujuwenjianjia = DATA_DIR
 # 默认网站地址
 DEFAULT_URL = "https://www.douban.com/"
 
-class BaseDialog(QDialog):
-    """基础对话框类"""
-    def __init__(self, parent=None, title="", min_width=350, min_height=180):
-        super().__init__(parent)
-        self.setWindowTitle(title)
-        self.setMinimumSize(min_width, min_height)
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)  # 移除帮助按钮
-        self.init_ui()
-        self.apply_dialog_style()
-    
-    def init_ui(self):
-        """初始化UI，子类需要重写此方法"""
-        pass
-    
-    def apply_dialog_style(self):
-        """应用对话框样式"""
-        self.setStyleSheet(DIALOG_STYLE)
+# BaseDialog 类已移至 ui.dialogs.base_dialog 模块
 
-class AccountDialog(BaseDialog):
-    """账号编辑对话框"""
-    def __init__(self, parent=None, account_data=None):
-        self.data_manager = DataManager()  # 初始化数据管理器
-        self.account_data = account_data or self.data_manager.load_peizhi()  # 从peizhi.json加载配置数据
-        title = "编辑账号" if account_data else "添加账号"
-        super().__init__(parent, title, 450, 350)
-    
-    def init_ui(self):
-        layout = QVBoxLayout()
-        layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
-        
-        # 创建输入字段
-        fields = [
-            ("用户名:", "username"),
-            ("密码:", "password"),
-            ("分组:", "group_name", True),
-            ("代理:", "proxy")
-        ]
-        
-        for label_text, field_name, *args in fields:
-            field_layout = QHBoxLayout()
-            field_layout.setSpacing(10)
-            label = QLabel(label_text)
-            field_layout.addWidget(label)
-            
-            if args and args[0]:  # 如果是下拉框
-                widget = QComboBox()
-                widget.addItems(self.parent().db_manager.get_groups())
-                if self.account_data.get(field_name):
-                    widget.setCurrentText(self.account_data[field_name])
-            else:
-                # 从配置数据中读取内容，无数据时使用空字符串（确保键名匹配）
-                initial_value = self.account_data.get(field_name, '')
-                logger.debug(f'加载配置数据：{field_name} = {initial_value}')  # 添加日志验证
-                widget = QLineEdit(initial_value)
-            
-            field_layout.addWidget(widget)
-            layout.addLayout(field_layout)
-            setattr(self, f"{field_name}_widget", widget)
-        
-        # 如果是编辑模式，添加"查看指纹数据"按钮
-        if self.account_data:
-            fingerprint_layout = QHBoxLayout()
-            fingerprint_layout.setSpacing(10)
-            fingerprint_btn = QPushButton("查看指纹数据")
-            fingerprint_btn.clicked.connect(self.show_fingerprint_data)
-            fingerprint_layout.addWidget(fingerprint_btn)
-            layout.addLayout(fingerprint_layout)
-        
-        # 按钮布局
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(10)
-        
-        save_btn = QPushButton("保存")
-        save_btn.clicked.connect(self.accept)
-        cancel_btn = QPushButton("取消")
-        cancel_btn.clicked.connect(self.reject)
-        
-        button_layout.addWidget(save_btn)
-        button_layout.addWidget(cancel_btn)
-        layout.addLayout(button_layout)
-        
-        self.setLayout(layout)
-    
-    def show_fingerprint_data(self):
-        """显示指纹数据（分项展示并带中文说明）"""
-        username = self.username_widget.text()
-        if not username:
-            self.parent().browser_signals.error.emit("无法获取账号信息")
-            return
-        
-        # 使用统一的工具函数显示指纹数据
-        from utils import show_fingerprint_dialog
-        show_fingerprint_dialog(self, username)
-    
-    def get_data(self):
-        """
-        获取账号数据，保证所有字段齐全，未填写的补空字符串，防止数据库错位。
-        """
-        return {
-            'username': self.username_widget.text(),
-            'password': self.password_widget.text(),
-            'ck': getattr(self, 'ck_widget', None).text() if hasattr(self, 'ck_widget') else '',
-            'nickname': getattr(self, 'nickname_widget', None).text() if hasattr(self, 'nickname_widget') else '',
-            'account_id': getattr(self, 'account_id_widget', None).text() if hasattr(self, 'account_id_widget') else '',
-            'login_status': getattr(self, 'login_status_widget', None).text() if hasattr(self, 'login_status_widget') else '',
-            'homepage': getattr(self, 'homepage_widget', None).text() if hasattr(self, 'homepage_widget') else '',
-            'login_time': getattr(self, 'login_time_widget', None).text() if hasattr(self, 'login_time_widget') else '',
-            'proxy': self.proxy_widget.text(),
-            'running_status': getattr(self, 'running_status_widget', None).text() if hasattr(self, 'running_status_widget') else '',
-            'note': getattr(self, 'note_widget', None).text() if hasattr(self, 'note_widget') else '',
-            'group_name': self.group_name_widget.currentText()
-        }
+# AccountDialog 类已移至 ui.dialogs.account_dialog 模块
 
-class GroupDialog(BaseDialog):
-    """分组编辑对话框"""
-    def __init__(self, parent=None, group_name=None, mode="add"):
-        self.group_name = group_name
-        self.mode = mode
-        super().__init__(parent, "添加分组" if mode == "add" else "编辑分组")
-    
-    def init_ui(self):
-        layout = QVBoxLayout()
-        layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
-        
-        # 分组名称输入
-        name_layout = QHBoxLayout()
-        name_layout.setSpacing(10)
-        label = QLabel("分组名称:")
-        name_layout.addWidget(label)
-        self.name_edit = QLineEdit(self.group_name or '')
-        name_layout.addWidget(self.name_edit)
-        layout.addLayout(name_layout)
-        
-        # 按钮布局
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(10)
-        
-        save_btn = QPushButton("保存")
-        save_btn.clicked.connect(self.accept)
-        cancel_btn = QPushButton("取消")
-        cancel_btn.clicked.connect(self.reject)
-        
-        button_layout.addWidget(save_btn)
-        button_layout.addWidget(cancel_btn)
-        layout.addLayout(button_layout)
-        
-        self.setLayout(layout)
-    
-    def get_data(self):
-        return self.name_edit.text()
+# GroupDialog 类已移至 ui.dialogs.account_dialog 模块
 
 class BrowserSignals(QObject):
     """浏览器信号类"""
@@ -380,15 +237,15 @@ class AccountManagerWindow(QMainWindow):
         self.group_table.setColumnCount(1)
         self.group_table.setHorizontalHeaderLabels(["分组名称"])
         self.group_table.horizontalHeader().setStretchLastSection(True)
-        self.group_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.group_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.group_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.group_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.group_table.verticalHeader().setVisible(False)
         self.group_table.setMinimumWidth(180)
         
         # 设置分组表格样式优化
         self.group_table.setAlternatingRowColors(True)  # 交替行颜色
         self.group_table.setShowGrid(True)  # 显示网格线
-        self.group_table.setGridStyle(Qt.SolidLine)  # 实线网格
+        self.group_table.setGridStyle(Qt.PenStyle.SolidLine)  # 实线网格
         group_layout.addWidget(self.group_table)
         
         # 分组按钮
@@ -435,11 +292,11 @@ class AccountManagerWindow(QMainWindow):
         # 设置表格样式优化
         self.account_table.setAlternatingRowColors(True)  # 交替行颜色
         self.account_table.setShowGrid(True)  # 显示网格线
-        self.account_table.setGridStyle(Qt.SolidLine)  # 实线网格
+        self.account_table.setGridStyle(Qt.PenStyle.SolidLine)  # 实线网格
         
         self.account_table.horizontalHeader().setStretchLastSection(True)
-        self.account_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.account_table.setSelectionMode(QTableWidget.ExtendedSelection)
+        self.account_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.account_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.account_table.verticalHeader().setVisible(False)
         
         # 连接复选框点击事件
@@ -541,8 +398,8 @@ class AccountManagerWindow(QMainWindow):
             table.setColumnCount(3)
             table.setHorizontalHeaderLabels(["序号", "电影ID", "星级"])
             table.horizontalHeader().setStretchLastSection(True)
-            table.setSelectionBehavior(QTableWidget.SelectRows)
-            table.setSelectionMode(QTableWidget.ExtendedSelection)
+            table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+            table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
             table.verticalHeader().setVisible(False)
             # 设置表格最小高度
             table.setMinimumHeight(400)
@@ -558,7 +415,7 @@ class AccountManagerWindow(QMainWindow):
             # 设置Fluent风格优化
             table.setAlternatingRowColors(True)  # 交替行颜色
             table.setShowGrid(True)  # 显示网格线
-            table.setGridStyle(Qt.SolidLine)  # 实线网格
+            table.setGridStyle(Qt.PenStyle.SolidLine)  # 实线网格
         
         # 添加电影表格到布局
         movie_group_layout.addWidget(self.create_table_with_label("指定电影", self.movie_specific_table))
@@ -630,8 +487,8 @@ class AccountManagerWindow(QMainWindow):
             table.setColumnCount(2)
             table.setHorizontalHeaderLabels(["序号", "内容"])
             table.horizontalHeader().setStretchLastSection(True)
-            table.setSelectionBehavior(QTableWidget.SelectRows)
-            table.setSelectionMode(QTableWidget.ExtendedSelection)
+            table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+            table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
             table.verticalHeader().setVisible(False)
             # 设置表格最小高度
             table.setMinimumHeight(400)
@@ -646,7 +503,7 @@ class AccountManagerWindow(QMainWindow):
             # 设置Fluent风格优化
             table.setAlternatingRowColors(True)  # 交替行颜色
             table.setShowGrid(True)  # 显示网格线
-            table.setGridStyle(Qt.SolidLine)  # 实线网格
+            table.setGridStyle(Qt.PenStyle.SolidLine)  # 实线网格
         
         # 添加内容表格到布局
         content_group_layout.addWidget(self.create_table_with_label("指定内容", self.content_specific_table))
@@ -748,9 +605,9 @@ class AccountManagerWindow(QMainWindow):
             max_edit = QLineEdit("5")
             for edit in [min_edit, max_edit]:
                 edit.setFixedWidth(60)
-                edit.setAlignment(Qt.AlignCenter)
+                edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 edit.setFixedWidth(60)
-                edit.setAlignment(Qt.AlignCenter)
+                edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
             
             setattr(self, f"{name}_min", min_edit)
             setattr(self, f"{name}_max", max_edit)
@@ -781,7 +638,7 @@ class AccountManagerWindow(QMainWindow):
         self.rating_max = QLineEdit("2")
         for edit in [self.rating_min, self.rating_max]:
             edit.setFixedWidth(60)
-            edit.setAlignment(Qt.AlignCenter)
+            edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
         rating_range_layout.addWidget(self.rating_min)
         rating_range_layout.addWidget(QLabel("-"))
         rating_range_layout.addWidget(self.rating_max)
@@ -912,10 +769,10 @@ class AccountManagerWindow(QMainWindow):
         cache_path_layout.addWidget(self.create_button("浏览", self.browse_cache))
         browser_layout.addLayout(cache_path_layout)
         
-        browser_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        browser_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
         
         layout.addWidget(browser_group)
-        layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        layout.addItem(QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
         
         # 显示已保存的配置
         if self.config:
@@ -1029,16 +886,16 @@ class AccountManagerWindow(QMainWindow):
             if item:
                 # 切换复选框状态
                 current_state = item.checkState()
-                new_state = Qt.Checked if current_state == Qt.Unchecked else Qt.Unchecked
+                new_state = Qt.CheckState.Checked if current_state == Qt.CheckState.Unchecked else Qt.CheckState.Unchecked
                 item.setCheckState(new_state)
                 
                 # 更新数据库中的勾选状态
                 try:
                     # 获取账号ID（存储在账号列的UserRole中）
-                    account_id = self.account_table.item(row, 2).data(Qt.UserRole)
+                    account_id = self.account_table.item(row, 2).data(Qt.ItemDataRole.UserRole)
                     if account_id:
                         # 转换勾选状态为数据库值
-                        gouxuan_value = 1 if new_state == Qt.Checked else 0
+                        gouxuan_value = 1 if new_state == Qt.CheckState.Checked else 0
                         # 更新数据库
                         if self.data_manager.update_account_gouxuan(account_id, gouxuan_value):
                             logger.debug(f"账号 {account_id} 勾选状态已更新为: {gouxuan_value}")
@@ -1052,9 +909,9 @@ class AccountManagerWindow(QMainWindow):
         selected_accounts = []
         for row in range(self.account_table.rowCount()):
             checkbox_item = self.account_table.item(row, 0)
-            if checkbox_item and checkbox_item.checkState() == Qt.Checked:
+            if checkbox_item and checkbox_item.checkState() == Qt.CheckState.Checked:
                 username = self.account_table.item(row, 2).text()
-                account_id = self.account_table.item(row, 2).data(Qt.UserRole)
+                account_id = self.account_table.item(row, 2).data(Qt.ItemDataRole.UserRole)
                 selected_accounts.append({
                     'row': row,
                     'username': username,
@@ -1075,11 +932,11 @@ class AccountManagerWindow(QMainWindow):
         for row in range(self.account_table.rowCount()):
             checkbox_item = self.account_table.item(row, 0)
             if checkbox_item:
-                checkbox_item.setCheckState(Qt.Checked if select else Qt.Unchecked)
+                checkbox_item.setCheckState(Qt.CheckState.Checked if select else Qt.CheckState.Unchecked)
                 
                 # 更新数据库中的勾选状态
                 try:
-                    account_id = self.account_table.item(row, 2).data(Qt.UserRole)
+                    account_id = self.account_table.item(row, 2).data(Qt.ItemDataRole.UserRole)
                     if account_id:
                         gouxuan_value = 1 if select else 0
                         if self.data_manager.update_account_gouxuan(account_id, gouxuan_value):
@@ -1101,8 +958,8 @@ class AccountManagerWindow(QMainWindow):
             checkbox_item = QTableWidgetItem()
             # 恢复之前保存的勾选状态（account[13]是gouxuan字段）
             gouxuan_state = account[13] if len(account) > 13 else 0
-            checkbox_item.setCheckState(Qt.Checked if gouxuan_state == 1 else Qt.Unchecked)
-            checkbox_item.setTextAlignment(Qt.AlignCenter)
+            checkbox_item.setCheckState(Qt.CheckState.Checked if gouxuan_state == 1 else Qt.CheckState.Unchecked)
+            checkbox_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.account_table.setItem(i, 0, checkbox_item)
             
             # 其他列数据
@@ -1120,7 +977,7 @@ class AccountManagerWindow(QMainWindow):
             self.account_table.setItem(i, 12, QTableWidgetItem(account[11] or '')) # 备注
             
             # 保存账号ID到第二列（账号列）的UserRole中
-            self.account_table.item(i, 2).setData(Qt.UserRole, account[0])
+            self.account_table.item(i, 2).setData(Qt.ItemDataRole.UserRole, account[0])
             
             # 设置行高
             self.account_table.setRowHeight(i, 36)
@@ -1129,7 +986,7 @@ class AccountManagerWindow(QMainWindow):
             for j in range(1, self.account_table.columnCount()):
                 item = self.account_table.item(i, j)
                 if item:
-                    item.setTextAlignment(Qt.AlignCenter)
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
     
     def add_account(self):
         """添加账号"""
@@ -1168,10 +1025,10 @@ class AccountManagerWindow(QMainWindow):
         
         reply = QMessageBox.question(
             self, "确认", f"确定要删除分组 '{group_name}' 吗？\n该分组下的账号将移至默认分组",
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
-        if reply == QMessageBox.Yes:
+        if reply == QMessageBox.StandardButton.Yes:
             if self.data_manager.delete_group(group_name):
                 self.load_data()
             else:
@@ -1561,7 +1418,7 @@ class AccountManagerWindow(QMainWindow):
                         for col in range(3):
                             item = self.movie_specific_table.item(i, col)
                             if item:
-                                item.setTextAlignment(Qt.AlignCenter)
+                                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             
             # 加载随机电影数据
             random_movies = self.data_manager.load_movies('random')
@@ -1577,7 +1434,7 @@ class AccountManagerWindow(QMainWindow):
                         for col in range(3):
                             item = self.movie_random_table.item(i, col)
                             if item:
-                                item.setTextAlignment(Qt.AlignCenter)
+                                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             
             # 加载指定内容数据
             specific_contents = self.data_manager.load_contents('specific')
@@ -1590,7 +1447,7 @@ class AccountManagerWindow(QMainWindow):
                     for col in range(2):
                         item = self.content_specific_table.item(i, col)
                         if item:
-                            item.setTextAlignment(Qt.AlignCenter)
+                            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             
             # 加载随机内容数据
             random_contents = self.data_manager.load_contents('random')
@@ -1603,7 +1460,7 @@ class AccountManagerWindow(QMainWindow):
                     for col in range(2):
                         item = self.content_random_table.item(i, col)
                         if item:
-                            item.setTextAlignment(Qt.AlignCenter)
+                            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             
             logger.info("电影和内容数据加载成功")
         except Exception as e:
@@ -1715,8 +1572,8 @@ if __name__ == "__main__":
     
     # 设置系统特定的应用程序属性
     if platform.system() == "Darwin":  # macOS
-        app.setAttribute(Qt.AA_UseHighDpiPixmaps)
-        app.setAttribute(Qt.AA_EnableHighDpiScaling)
+        app.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
+        app.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling)
 
     
     elif platform.system() == "Windows":  # Windows
