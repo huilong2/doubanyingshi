@@ -7,6 +7,6 @@ proxy_api_url = "http://proxy.siyetian.com/apis_get.html?token=AesJWLNp2Z31kaJdX
 proxy_ip = get_proxy_ip(proxy_api_url)
     
 if proxy_ip:
-    print(f"获取到的代理IP: {proxy_ip}")
+    print(f"获取11111到的代理IP: {proxy_ip}")
 else:
     print("获取代理IP失败")
