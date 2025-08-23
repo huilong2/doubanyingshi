@@ -1,0 +1,21 @@
+{
+  "browser_path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+  "browser_cache_path": "E:/liulanqi",
+  "function_settings": {
+    "signature": false,
+    "status": false,
+    "group": false,
+    "phrase": false,
+    "content": "",
+    "rating_min": "1",
+    "rating_max": "2",
+    "star_rating": "3|4|5",
+    "rating_type": "电影",
+    "operation_interval_min": "3",
+    "operation_interval_max": "5",
+    "account_interval_min": "3",
+    "account_interval_max": "5",
+    "error_interval_min": "3",
+    "error_interval_max": "5"
+  }
+}

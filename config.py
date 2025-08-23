@@ -41,9 +41,7 @@ class ProgramConfig:
         self.logs_dir = self.program_root / "logs"
         self.logs_dir.mkdir(exist_ok=True)
         
-        # 缓存目录 - 存储浏览器缓存、临时文件等
-        self.cache_dir = self.program_root / "cache"
-        self.cache_dir.mkdir(exist_ok=True)
+
         
         # 临时文件目录
         self.temp_dir = self.program_root / "temp"
@@ -65,9 +63,7 @@ class ProgramConfig:
         """获取日志文件路径"""
         return self.logs_dir / "app.log"
     
-    def get_cache_path(self):
-        """获取缓存目录路径"""
-        return self.cache_dir
+
     
     def get_temp_path(self):
         """获取临时文件目录路径"""
@@ -77,9 +73,7 @@ class ProgramConfig:
         """获取备份目录路径"""
         return self.backup_dir
     
-    def get_browser_cache_path(self, username):
-        """获取指定用户的浏览器缓存路径"""
-        return self.cache_dir / username
+
     
     def get_system_info(self):
         """获取系统信息"""
@@ -141,7 +135,7 @@ class ProgramConfig:
             'program_root': str(self.program_root),
             'data_dir': str(self.data_dir),
             'logs_dir': str(self.logs_dir),
-            'cache_dir': str(self.cache_dir),
+
             'temp_dir': str(self.temp_dir),
             'backup_dir': str(self.backup_dir)
         }
@@ -153,6 +147,5 @@ config = ProgramConfig()
 PROGRAM_ROOT = config.program_root
 DATA_DIR = config.data_dir
 LOGS_DIR = config.logs_dir
-CACHE_DIR = config.cache_dir
 TEMP_DIR = config.temp_dir
 BACKUP_DIR = config.backup_dir

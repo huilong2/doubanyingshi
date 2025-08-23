@@ -38,10 +38,12 @@ def add_account_handler(window):
             
             # 生成指纹
             try:
-                from liulanqimokuai.fingerprint_manager import FingerprintGenerator
-                fingerprint_generator = FingerprintGenerator()
-                fingerprint = fingerprint_generator.generate_random_fingerprint()
-                account_data['fingerprint'] = fingerprint
+                from utils import ensure_account_fingerprint
+                fingerprint = ensure_account_fingerprint(account_data['username'])
+                if fingerprint:
+                    account_data['fingerprint'] = fingerprint
+                else:
+                    raise Exception("指纹生成失败")
             except Exception as e:
                 logger.error(f"生成指纹失败: {str(e)}")
                 QMessageBox.warning(window, "警告", "指纹生成失败")
@@ -52,10 +54,12 @@ def add_account_handler(window):
                 # 保存指纹数据到账号目录
                 try:
                     username = account_data['username']
-                    # 统一使用默认的data目录保存指纹数据
-                    default_data_dir = Path('data') / username
-                    from liulanqimokuai.fingerprint_manager import FingerprintManager
-                    FingerprintManager().save_fingerprint_to_file(fingerprint, str(default_data_dir))
+                    from utils import save_account_fingerprint
+                    
+                    if save_account_fingerprint(username, fingerprint):
+                        logger.info(f"已为账号 {username} 生成并保存指纹数据")
+                    else:
+                        logger.error(f"保存账号 {username} 指纹数据失败")
                 except Exception as e:
                     logger.error(f"保存指纹数据失败: {str(e)}")
                 window.load_accounts()
@@ -120,58 +124,49 @@ def delete_account_handler(window):
         return
     
     # 确认删除
-    reply = QMessageBox.question(
-        window,
-        "确认删除",
-        f"确定要删除选中的 {len(selected_rows)} 个账号吗？",
-        QMessageBox.Yes | QMessageBox.No,
-        QMessageBox.No
-    )
+    reply = QMessageBox.question(window, "确认删除", 
+                               f"确定要删除选中的 {len(selected_rows)} 个账号吗？\n此操作不可恢复！",
+                               QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
     
     if reply == QMessageBox.Yes:
-        success_count = 0
-        logger.info(f"开始删除 {len(selected_rows)} 个账号")
-        for row in sorted(selected_rows, reverse=True):  # 逆序删除避免索引问题
-            username = window.account_table.item(row, 2).text()
-            account_id = window.account_table.item(row, 2).data(Qt.UserRole)  # 获取账号ID
-            logger.info(f"正在删除账号: {username}, ID: {account_id}")
-            
-            # 删除账号相关的浏览器缓存数据
-            cache_path = window.config.get('browser_cache_path', '')
-            if cache_path:
-                # 优先使用配置的缓存路径
-                user_data_dir = Path(cache_path) / username
-                if user_data_dir.exists():
-                    try:
-                        import shutil
-                        shutil.rmtree(user_data_dir)
-                        logger.info(f"已删除账号 {username} 的浏览器缓存数据 (配置路径)")
-                    except Exception as e:
-                        logger.error(f"删除账号 {username} 的浏览器缓存数据失败 (配置路径): {str(e)}")
-            else:
-                # 如果未配置缓存路径，尝试删除默认的data目录下的数据
-                default_data_dir = Path('data') / username
-                if default_data_dir.exists():
-                    try:
-                        import shutil
-                        shutil.rmtree(default_data_dir)
-                        logger.info(f"已删除账号 {username} 的浏览器缓存数据 (默认路径)")
-                    except Exception as e:
-                        logger.error(f"删除账号 {username} 的浏览器缓存数据失败 (默认路径): {str(e)}")
-            
-            # 从数据库删除账号
-            if window.data_manager.delete_account(account_id):
-                success_count += 1
-                logger.info(f"成功从数据库删除账号: {username}")
-            else:
-                logger.error(f"从数据库删除账号失败: {username}")
+        deleted_count = 0
+        for row in sorted(selected_rows, reverse=True):
+            try:
+                # 获取账号信息
+                username = window.account_table.item(row, 2).text()  # 用户名列
+                accounts = window.data_manager.get_accounts()
+                account_info = None
+                for account in accounts:
+                    if account[1] == username:
+                        account_info = account
+                        break
+                
+                if account_info:
+                    # 删除账号数据
+                    if window.data_manager.delete_account(account_info[0]):
+                        deleted_count += 1
+                        
+                        # 删除账号相关的缓存文件和目录
+                        try:
+                            from utils import delete_account_cache
+                            
+                            # 删除浏览器缓存目录
+                            if delete_account_cache(username):
+                                logger.info(f"已删除账号 {username} 的缓存目录")
+                            else:
+                                logger.warning(f"删除账号 {username} 缓存目录失败")
+                                
+                        except Exception as e:
+                            logger.error(f"删除账号缓存文件失败: {str(e)}")
+                
+            except Exception as e:
+                logger.error(f"删除账号时出错: {str(e)}")
         
         # 刷新账号列表
         window.load_accounts()
         
-        # 显示结果
-        if success_count > 0:
-            QMessageBox.information(window, "成功", f"成功删除 {success_count} 个账号")
+        if deleted_count > 0:
+            QMessageBox.information(window, "成功", f"已成功删除 {deleted_count} 个账号")
         else:
             QMessageBox.warning(window, "失败", "删除账号失败")
 
@@ -356,7 +351,61 @@ def clear_random_contents_handler(window):
 
 def on_run_start_clicked_handler(window):
     """运行开始点击处理函数"""
-    QMessageBox.information(window, "提示", "运行功能后续实现")
+    print("🔍 DEBUG: 开始按钮被点击了！")
+    print(f"🔍 DEBUG: 当前选择框的值: '{window.run_mode_combo.currentText()}'")
+    print(f"🔍 DEBUG: 选择框索引: {window.run_mode_combo.currentIndex()}")
+    
+    # 首先检查是否已选择分组
+    if not window.is_group_selected():
+        print("❌ 错误：未选择账号分组！")
+        QMessageBox.critical(window, "错误", "请先点击选择账号分组，然后才能开始执行任务！\n\n操作步骤：\n1. 在左侧分组列表中点击选择一个分组\n2. 确认分组被高亮选中\n3. 再次点击开始按钮")
+        return
+    
+    print(f"✅ 已选择分组: {window.get_selected_group_name()}")
+    
+    # 获取选择框的当前值
+    selected_mode = window.run_mode_combo.currentText()
+    
+    if selected_mode == "指定电影评论评星":
+        print("🔍 DEBUG: 选择了'指定电影评论评星'，开始执行...")
+        # 执行指定电影评论评星功能
+        try:
+            print("🔍 DEBUG: 正在导入zhixingliucheng模块...")
+            # 导入执行流程模块
+            from zhixingliucheng import suijidianyingpinglunpingxing
+            
+            print("🔍 DEBUG: 模块导入成功，开始调用函数...")
+            # 获取当前选中的分组名称
+            selected_group = window.get_selected_group_name()
+            print(f"🔍 DEBUG: 使用分组: {selected_group}")
+            
+            # 执行功能（异步函数）
+            import asyncio
+            result = asyncio.run(suijidianyingpinglunpingxing(selected_group))
+            
+            print(f"🔍 DEBUG: 函数执行完成，返回值: {result}")
+            
+            if result and len(result) > 0:
+                content_data, movies_data = result
+                print(f"🔍 DEBUG: 处理了 {len(content_data)} 个内容和 {len(movies_data)} 个电影")
+                QMessageBox.information(window, "成功", f"执行完成！\n处理了 {len(content_data)} 个内容和 {len(movies_data)} 个电影")
+            else:
+                print("🔍 DEBUG: 没有数据需要处理或执行失败")
+                QMessageBox.warning(window, "警告", "没有数据需要处理或执行失败")
+                
+        except Exception as e:
+            print(f"🔍 DEBUG: 执行过程中出现错误: {str(e)}")
+            QMessageBox.critical(window, "错误", f"执行过程中出现错误：{str(e)}")
+            import traceback
+            print(f"错误详情：{traceback.format_exc()}")
+    
+    elif selected_mode == "随机评论":
+        print("🔍 DEBUG: 选择了'随机评论'")
+        QMessageBox.information(window, "提示", "随机评论功能待实现")
+    
+    else:
+        print(f"🔍 DEBUG: 选择了其他功能: '{selected_mode}'")
+        QMessageBox.information(window, "提示", f"功能 '{selected_mode}' 待实现")
 
 def add_movie_handler(window, movie_type):
     """添加电影处理函数（支持多行输入）"""

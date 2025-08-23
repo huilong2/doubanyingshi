@@ -21,7 +21,7 @@ from mokuai_chagyong import chagyong_load_config, chagyong_save_config
 from liulanqi_gongcaozuo import LiulanqiGongcaozuo, LiulanqiPeizhi
 from renwuliucheng import RenwuLiucheng
 from liulanqimokuai.fingerprint_manager import FingerprintManager
-from config import config, DATA_DIR, LOGS_DIR, CACHE_DIR, TEMP_DIR, BACKUP_DIR
+from config import config, DATA_DIR, LOGS_DIR, TEMP_DIR, BACKUP_DIR
 from styles import (
     get_complete_fluent_style, DIALOG_STYLE, FINGERPRINT_DIALOG_STYLE,
     FLUENT_COLORS, LAYOUT
@@ -181,80 +181,14 @@ class AccountDialog(BaseDialog):
     
     def show_fingerprint_data(self):
         """显示指纹数据（分项展示并带中文说明）"""
-        try:
-            username = self.username_widget.text()
-            if not username:
-                self.parent().browser_signals.error.emit("无法获取账号信息")
-                return
-            
-            # 从文件系统读取指纹数据
-            cache_path = self.parent().config.get('browser_cache_path', '')
-            if not cache_path:
-                self.parent().browser_signals.error.emit("请先在设置中配置浏览器缓存路径")
-                return
-                
-            account_dir = Path(cache_path) / username
-            fingerprint_manager = FingerprintManager()
-            fingerprint = fingerprint_manager.get_account_fingerprint(str(account_dir))
-            
-            if not fingerprint:
-                self.parent().browser_signals.error.emit("该账号未保存指纹数据")
-                return
-                
-            desc = {
-                'user_agent': '浏览器UA',
-                'screen_width': '屏幕宽度',
-                'screen_height': '屏幕高度',
-                'color_depth': '颜色深度',
-                'timezone': '时区',
-                'language': '语言',
-                'platform': '平台',
-                'webgl_vendor': 'WebGL厂商',
-                'webgl_renderer': 'WebGL渲染器',
-                'fonts': '字体列表',
-                'plugins': '插件列表',
-                'canvas': 'Canvas指纹',
-                'audio': '音频指纹',
-                'media_devices': '多媒体设备',
-                'latitude': '纬度',
-                'longitude': '经度',
-            }
-            from PySide6.QtWidgets import QFormLayout, QLabel, QTextEdit, QDialog, QHBoxLayout, QPushButton
-            dialog = QDialog(self)
-            dialog.setWindowTitle("指纹数据")
-            dialog.setMinimumSize(600, 500)
-            dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
-            layout = QFormLayout(dialog)
-            for key in [
-                'user_agent','screen_width','screen_height','color_depth','timezone','language','platform',
-                'webgl_vendor','webgl_renderer','fonts','plugins','canvas','audio','media_devices','latitude','longitude']:
-                if key in fingerprint:
-                    label = f"{key}（{desc.get(key, key)}）"
-                    value = fingerprint[key]
-                    if isinstance(value, (list, dict)):
-                        value_str = json.dumps(value, ensure_ascii=False, indent=2)
-                        text = QTextEdit()
-                        text.setReadOnly(True)
-                        text.setText(value_str)
-                        layout.addRow(label, text)
-                    else:
-                        layout.addRow(label, QLabel(str(value)))
-            button_layout = QHBoxLayout()
-            close_btn = QPushButton("关闭")
-            close_btn.clicked.connect(dialog.close)
-            button_layout.addWidget(close_btn)
-            layout.addRow(button_layout)
-            dialog.setLayout(layout)
-            
-            # 应用Fluent风格到指纹数据对话框
-            dialog.setStyleSheet(FINGERPRINT_DIALOG_STYLE)
-            dialog.exec()
-        except Exception as e:
-            error_msg = f"显示指纹数据失败: {str(e)}"
-            import logging
-            logger = logging.getLogger("AccountDialog")
-            logger.error(error_msg)
-            self.parent().browser_signals.error.emit(error_msg)
+        username = self.username_widget.text()
+        if not username:
+            self.parent().browser_signals.error.emit("无法获取账号信息")
+            return
+        
+        # 使用统一的工具函数显示指纹数据
+        from utils import show_fingerprint_dialog
+        show_fingerprint_dialog(self, username)
     
     def get_data(self):
         """
@@ -334,6 +268,11 @@ class AccountManagerWindow(QMainWindow):
         self.browser_signals.account_closed.connect(self.handle_browser_closed)
 
         self.active_browser_sessions = {} # Store {username: {'thread': Thread, 'stop_event': Event, 'liulanqi': Liulanqi_instance}}
+        
+        # 初始化分组选择状态跟踪
+        self.group_selected = False
+        self.selected_group_name = None
+        
         self.load_config()
         self.init_ui()
         self.apply_fluent_style()  # 应用Fluent风格
@@ -893,7 +832,7 @@ class AccountManagerWindow(QMainWindow):
         run_layout.addWidget(self.run_start_btn)
 
         self.run_mode_combo = QComboBox()
-        self.run_mode_combo.addItems(["指定电影评论评星", "随机评论", "指定电影评论评星"])
+        self.run_mode_combo.addItems(["指定电影评论评星", "随机评论", "其他功能"])
         run_layout.addWidget(self.run_mode_combo)
 
         self.run_status_combo = QComboBox()
@@ -1073,8 +1012,14 @@ class AccountManagerWindow(QMainWindow):
         """处理分组选择变化"""
         selected = self.group_table.selectedItems()
         if selected:
+            self.group_selected = True
+            self.selected_group_name = selected[0].text()
+            print(f"✅ 已选择分组: {self.selected_group_name}")
             self.load_accounts(selected[0].text())
         else:
+            self.group_selected = False
+            self.selected_group_name = None
+            print(f"⚠️ 未选择任何分组")
             self.load_accounts()
     
     def on_account_checkbox_clicked(self, row, column):
@@ -1086,6 +1031,21 @@ class AccountManagerWindow(QMainWindow):
                 current_state = item.checkState()
                 new_state = Qt.Checked if current_state == Qt.Unchecked else Qt.Unchecked
                 item.setCheckState(new_state)
+                
+                # 更新数据库中的勾选状态
+                try:
+                    # 获取账号ID（存储在账号列的UserRole中）
+                    account_id = self.account_table.item(row, 2).data(Qt.UserRole)
+                    if account_id:
+                        # 转换勾选状态为数据库值
+                        gouxuan_value = 1 if new_state == Qt.Checked else 0
+                        # 更新数据库
+                        if self.data_manager.update_account_gouxuan(account_id, gouxuan_value):
+                            logger.debug(f"账号 {account_id} 勾选状态已更新为: {gouxuan_value}")
+                        else:
+                            logger.error(f"更新账号 {account_id} 勾选状态失败")
+                except Exception as e:
+                    logger.error(f"处理账号勾选状态更新时出错: {str(e)}")
     
     def get_selected_accounts(self):
         """获取所有选中的账号"""
@@ -1102,12 +1062,32 @@ class AccountManagerWindow(QMainWindow):
                 })
         return selected_accounts
     
+    def is_group_selected(self):
+        """检查是否已选择分组"""
+        return self.group_selected
+    
+    def get_selected_group_name(self):
+        """获取当前选中的分组名称"""
+        return self.selected_group_name
+    
     def select_all_accounts(self, select=True):
         """全选或取消全选所有账号"""
         for row in range(self.account_table.rowCount()):
             checkbox_item = self.account_table.item(row, 0)
             if checkbox_item:
                 checkbox_item.setCheckState(Qt.Checked if select else Qt.Unchecked)
+                
+                # 更新数据库中的勾选状态
+                try:
+                    account_id = self.account_table.item(row, 2).data(Qt.UserRole)
+                    if account_id:
+                        gouxuan_value = 1 if select else 0
+                        if self.data_manager.update_account_gouxuan(account_id, gouxuan_value):
+                            logger.debug(f"账号 {account_id} 全选状态已更新为: {gouxuan_value}")
+                        else:
+                            logger.error(f"更新账号 {account_id} 全选状态失败")
+                except Exception as e:
+                    logger.error(f"处理账号全选状态更新时出错: {str(e)}")
     
     def load_accounts(self, group_name=None):
         """加载账号数据"""
@@ -1119,7 +1099,9 @@ class AccountManagerWindow(QMainWindow):
             
             # 第一列添加复选框
             checkbox_item = QTableWidgetItem()
-            checkbox_item.setCheckState(Qt.Unchecked)
+            # 恢复之前保存的勾选状态（account[13]是gouxuan字段）
+            gouxuan_state = account[13] if len(account) > 13 else 0
+            checkbox_item.setCheckState(Qt.Checked if gouxuan_state == 1 else Qt.Unchecked)
             checkbox_item.setTextAlignment(Qt.AlignCenter)
             self.account_table.setItem(i, 0, checkbox_item)
             
@@ -1274,7 +1256,7 @@ class AccountManagerWindow(QMainWindow):
     def browse_cache(self):
         """浏览缓存目录"""
         # 默认使用程序目录内的 cache 文件夹
-        default_dir = str(CACHE_DIR)
+        default_dir = str(Path(__file__).parent / "cache")
         
         dir_path = QFileDialog.getExistingDirectory(
             self, 
@@ -1423,8 +1405,8 @@ class AccountManagerWindow(QMainWindow):
             return
         
         # 检查指纹数据
-        fingerprint_manager = FingerprintManager()
-        fingerprint = fingerprint_manager.get_account_fingerprint(str(account_dir))
+        from utils import get_account_fingerprint
+        fingerprint = get_account_fingerprint(username)
         if not fingerprint:
             self.browser_signals.error.emit("该账号未保存指纹数据，请先保存指纹数据")
             return

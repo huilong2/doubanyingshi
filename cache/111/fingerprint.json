@@ -1,0 +1,88 @@
+{
+  "user_agent": "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.5563.111 Safari/537.36",
+  "platform": "Windows",
+  "language": "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7",
+  "screen": {
+    "width": 1920,
+    "height": 1080
+  },
+  "color_depth": 24,
+  "timezone": "Asia/Beijing",
+  "webgl_vendor": "Intel Inc.",
+  "webgl_renderer": "Intel Iris OpenGL Engine",
+  "fonts": [
+    "SimHei",
+    "Trebuchet MS",
+    "Lucida Console",
+    "Bitstream Vera Sans",
+    "Source Code Pro",
+    "Andale Mono",
+    "Arial Black",
+    "Courier",
+    "STHupo",
+    "KaiTi",
+    "Garamond",
+    "Palatino",
+    "Nimbus Sans L",
+    "FreeSans",
+    "Georgia",
+    "STZhongsong",
+    "Microsoft YaHei",
+    "Comic Sans MS",
+    "Consolas",
+    "Liberation Sans",
+    "FangSong",
+    "Courier New",
+    "NSimSun",
+    "Arial",
+    "Verdana",
+    "STFangsong",
+    "Monaco",
+    "Lucida Sans Unicode",
+    "STKaiti",
+    "Impact",
+    "DejaVu Sans Mono",
+    "Monaco",
+    "Geneva",
+    "Lucida Grande"
+  ],
+  "plugins": [
+    "Chrome PDF Plugin",
+    "Chrome PDF Viewer",
+    "Widevine Content Decryption Module",
+    "Native Client"
+  ],
+  "canvas": "canvas_hash_1234567890abcdef",
+  "audio": "audio_hash_abcdef1234567890",
+  "media_devices": {
+    "audioinput": 1,
+    "audiooutput": 2,
+    "videoinput": 2
+  },
+  "geolocation": {
+    "latitude": 31.811032,
+    "longitude": 105.156992,
+    "accuracy": 24.380878476581778
+  },
+  "hardware_concurrency": 12,
+  "device_memory": 8,
+  "max_touch_points": 0,
+  "connection": {
+    "type": "ethernet",
+    "downlink": 34.81383703352297,
+    "rtt": 47.22593091351368,
+    "effectiveType": "3g"
+  },
+  "battery": {
+    "charging": true,
+    "level": 0.5875415619148732,
+    "chargingTime": 2502,
+    "dischargingTime": 6314
+  },
+  "permissions": {
+    "geolocation": "granted",
+    "notifications": "granted",
+    "camera": "denied",
+    "microphone": "denied"
+  }
+}

@@ -17,8 +17,10 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'liulanqimokuai'))
 
 from browser_core import BrowserController
-from fingerprint_manager import FingerprintManager
 from mokuai_ipdingwei import get_ip_location
+
+# 导入全局变量
+from bianlian_dingyi import DOUBAN_URL, DEFAULT_BROWSER_TIMEOUT, DEFAULT_PAGE_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +30,7 @@ class LiulanqiPeizhi:
     zhanghao: str  # 账号
     mima: Optional[str] = None  # 密码
     daili: Optional[str] = None  # 代理服务器地址
-    wangzhi: str = "https://www.douban.com"  # 默认启动网址
+    wangzhi: str = DOUBAN_URL  # 默认启动网址
     huanchunlujing: Optional[str] = None  # 缓存路径open_browser
     chrome_path: Optional[str] = None  # Chrome浏览器可执行文件路径
     fingerprint: Optional[Dict[str, Any]] = None  # 浏览器指纹
@@ -60,7 +62,6 @@ class LiulanqiGongcaozuo:
         
         # 新模块组件
         self.controller = BrowserController()
-        self.fingerprint_manager = FingerprintManager()
         
         # 状态管理
         self._is_closed = False
@@ -70,7 +71,8 @@ class LiulanqiGongcaozuo:
         
         # 从账号目录加载指纹数据
         if self.peizhi.huanchunlujing:
-            fingerprint = self.fingerprint_manager.ensure_account_fingerprint(self.peizhi.huanchunlujing)
+            from utils import ensure_account_fingerprint
+            fingerprint = ensure_account_fingerprint(self.peizhi.zhanghao)
             if fingerprint:
                 self.peizhi.fingerprint = fingerprint
         
@@ -261,7 +263,7 @@ class LiulanqiGongcaozuo:
             self.update_status("初始化失败")
             raise
 
-    async def _wait_for_browser_ready(self, timeout: int = 10):
+    async def _wait_for_browser_ready(self, timeout: int = DEFAULT_BROWSER_TIMEOUT):
         """智能等待浏览器准备就绪"""
         start_time = asyncio.get_event_loop().time()
         
@@ -320,7 +322,7 @@ class LiulanqiGongcaozuo:
             """))
             
             # 等待结果
-            login_status = login_status_future.result(timeout=10)
+            login_status = login_status_future.result(timeout=DEFAULT_BROWSER_TIMEOUT)
             logger.info(f"豆瓣登录状态: {login_status}")
             
             # 获取用户信息
@@ -335,7 +337,7 @@ class LiulanqiGongcaozuo:
         except Exception as e:
             logger.error(f"检查豆瓣状态失败: {str(e)}")
 
-    async def _wait_for_douban_page_ready(self, timeout: int = 10):
+    async def _wait_for_douban_page_ready(self, timeout: int = DEFAULT_BROWSER_TIMEOUT):
         """智能等待豆瓣页面准备就绪"""
         try:
             # 等待页面基本加载完成
@@ -344,12 +346,12 @@ class LiulanqiGongcaozuo:
             # 等待关键元素出现（登录按钮或用户信息）
             try:
                 # 尝试等待登录按钮（未登录状态）
-                await self.controller.page.wait_for_selector('.nav-login', timeout=3000)
+                await self.controller.page.wait_for_selector('.nav-login', timeout=DEFAULT_PAGE_TIMEOUT)
                 logger.info("检测到未登录状态")
             except:
                 try:
                     # 尝试等待用户信息（已登录状态）
-                    await self.controller.page.wait_for_selector('.nav-user-account, .user-info', timeout=3000)
+                    await self.controller.page.wait_for_selector('.nav-user-account, .user-info', timeout=DEFAULT_PAGE_TIMEOUT)
                     logger.info("检测到已登录状态")
                 except:
                     # 如果都找不到，至少等待body元素
@@ -367,7 +369,7 @@ class LiulanqiGongcaozuo:
             from douban_utils import DoubanUtils
             user_info_future = self.controller.run_async(self.controller.page.evaluate(DoubanUtils.get_user_info_script()))
             # 等待结果
-            user_info = user_info_future.result(timeout=10)
+            user_info = user_info_future.result(timeout=DEFAULT_BROWSER_TIMEOUT)
             return user_info
         except Exception as e:
             logger.error(f"获取用户信息失败: {str(e)}")
@@ -486,19 +488,15 @@ class LiulanqiGongcaozuo:
                 logger.warning("浏览器未启动，跳过指纹应用")
                 return
 
-            # 设置User-Agent和语言（通过context设置）
-            if 'user_agent' in fingerprint or 'language' in fingerprint:
-                try:
-                    extra_headers = {}
-                    if 'user_agent' in fingerprint:
-                        extra_headers['User-Agent'] = fingerprint['user_agent']
-                    if 'language' in fingerprint:
-                        extra_headers['Accept-Language'] = fingerprint['language']
-                    
-                    if extra_headers and self.controller.context:
-                        self.controller.run_async(self.controller.context.set_extra_http_headers(extra_headers))
-                except Exception as e:
-                    logger.error(f"设置User-Agent/语言失败: {str(e)}")
+            # 使用统一的指纹提取函数
+            try:
+                from utils import extract_fingerprint_headers
+                extra_headers = extract_fingerprint_headers(fingerprint)
+                
+                if extra_headers and self.controller.context:
+                    self.controller.run_async(self.controller.context.set_extra_http_headers(extra_headers))
+            except Exception as e:
+                logger.error(f"应用指纹数据失败: {str(e)}")
 
             # 注入指纹脚本
             fingerprint_script = """

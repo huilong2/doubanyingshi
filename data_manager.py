@@ -82,6 +82,7 @@ class DataManager:
             running_status TEXT,
             note TEXT,
             group_name TEXT,
+            gouxuan INTEGER DEFAULT 0,
             FOREIGN KEY (group_name) REFERENCES groups(name)
         )
         ''')
@@ -109,6 +110,16 @@ class DataManager:
         
         # 确保默认分组存在
         cursor.execute('INSERT OR IGNORE INTO groups (name) VALUES (?)', ('默认分组',))
+        
+        # 检查并添加gouxuan字段到accounts表（如果不存在）
+        try:
+            cursor.execute("PRAGMA table_info(accounts)")
+            columns = [column[1] for column in cursor.fetchall()]
+            if 'gouxuan' not in columns:
+                cursor.execute('ALTER TABLE accounts ADD COLUMN gouxuan INTEGER DEFAULT 0')
+                logger.info("成功添加gouxuan字段到accounts表")
+        except Exception as e:
+            logger.warning(f"添加gouxuan字段时出现警告: {str(e)}")
         
         conn.commit()
         conn.close()
@@ -336,6 +347,28 @@ class DataManager:
         conn.commit()
         conn.close()
         return True
+    
+    def update_account_gouxuan(self, account_id, gouxuan_value):
+        """更新账号的勾选状态
+        
+        Args:
+            account_id: 账号ID
+            gouxuan_value: 勾选状态 (0=未勾选, 1=已勾选)
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+            UPDATE accounts SET gouxuan = ? WHERE id = ?
+            ''', (gouxuan_value, account_id))
+            
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            logger.error(f"更新账号勾选状态失败: {str(e)}")
+            return False
     
     def delete_account(self, account_id):
         """删除账号"""

@@ -16,8 +16,8 @@ class FingerprintGenerator:
     def generate_random_fingerprint(self) -> Dict[str, Any]:
         """生成随机的浏览器指纹"""
         # 常用的User-Agent列表
-        windows_chrome_versions = ['110.0.5481.177', '111.0.5563.111', '112.0.5615.138']
-        mac_chrome_versions = ['110.0.5481.177', '111.0.5563.111', '112.0.5615.138']
+        windows_chrome_versions = ['110.0.5481.177', '111.0.5563.111', '112.0.5615.138', '113.0.5672.63', '114.0.5735.198']
+        mac_chrome_versions = ['110.0.5481.177', '111.0.5563.111', '112.0.5615.138', '113.0.5672.63', '114.0.5735.198']
         
         # 随机选择平台
         os_platform = random.choice(['Windows', 'MacOS'])
@@ -42,15 +42,167 @@ class FingerprintGenerator:
             'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
         ]
         
-        return {
+        # 屏幕分辨率 - 更真实的分辨率组合
+        screen_resolutions = [
+            # 常见笔记本分辨率
+            {'width': 1366, 'height': 768},
+            {'width': 1440, 'height': 900},
+            {'width': 1600, 'height': 900},
+            {'width': 1920, 'height': 1080},
+            {'width': 1920, 'height': 1200},
+            
+            # 常见桌面分辨率
+            {'width': 1680, 'height': 1050},
+            {'width': 1920, 'height': 1080},
+            {'width': 2560, 'height': 1440},
+            {'width': 2560, 'height': 1600},
+            {'width': 3440, 'height': 1440},  # 超宽屏
+            {'width': 3840, 'height': 2160},  # 4K
+        ]
+        
+        # 时区
+        timezones = [
+            'Asia/Shanghai',
+            'Asia/Beijing',
+            'Asia/Hong_Kong',
+            'Asia/Taipei',
+            'Asia/Singapore',
+        ]
+        
+        # WebGL厂商和渲染器
+        webgl_vendors = [
+            'Google Inc. (Intel)',
+            'Google Inc. (NVIDIA)',
+            'Google Inc. (AMD)',
+            'Intel Inc.',
+            'NVIDIA Corporation',
+            'AMD',
+        ]
+        
+        webgl_renderers = [
+            'Intel Iris OpenGL Engine',
+            'NVIDIA GeForce GTX 1060/PCIe/SSE2',
+            'AMD Radeon Pro 5500M OpenGL Engine',
+            'Intel(R) UHD Graphics 620',
+            'NVIDIA GeForce RTX 3060/PCIe/SSE2',
+            'AMD Radeon RX 6600 XT',
+        ]
+        
+        # 常用字体
+        fonts = [
+            'Arial', 'Helvetica', 'Times New Roman', 'Times', 'Courier New', 'Courier',
+            'Verdana', 'Georgia', 'Palatino', 'Garamond', 'Bookman', 'Comic Sans MS',
+            'Trebuchet MS', 'Arial Black', 'Impact', 'Lucida Sans Unicode', 'Tahoma',
+            'Lucida Grande', 'Geneva', 'Monaco', 'Andale Mono', 'DejaVu Sans Mono',
+            'Liberation Sans', 'Nimbus Sans L', 'FreeSans', 'Bitstream Vera Sans',
+            'Lucida Console', 'Monaco', 'Consolas', 'Source Code Pro', 'Menlo',
+            'Microsoft YaHei', 'SimHei', 'SimSun', 'NSimSun', 'FangSong', 'KaiTi',
+            'STXihei', 'STKaiti', 'STSong', 'STZhongsong', 'STFangsong', 'STHupo',
+        ]
+        
+        # 浏览器插件
+        plugins = [
+            'Chrome PDF Plugin',
+            'Chrome PDF Viewer',
+            'Native Client',
+            'Widevine Content Decryption Module',
+            'Shockwave Flash',
+            'Adobe Flash Player',
+        ]
+        
+        # 生成指纹数据
+        fingerprint = {
             'user_agent': user_agent,
             'platform': os_platform,
             'language': random.choice(languages),
-            'screen': {
-                'width': random.choice([1920, 2560, 3840]),
-                'height': random.choice([1080, 1440, 2160]),
-                'depth': 24
-            }
+            'screen': random.choice(screen_resolutions),
+            'color_depth': random.choice([24, 32]),
+            'timezone': random.choice(timezones),
+            'webgl_vendor': random.choice(webgl_vendors),
+            'webgl_renderer': random.choice(webgl_renderers),
+            'fonts': random.sample(fonts, random.randint(20, 35)),
+            'plugins': random.sample(plugins, random.randint(3, 6)),
+            'canvas': self._generate_canvas_fingerprint(),
+            'audio': self._generate_audio_fingerprint(),
+            'media_devices': self._generate_media_devices(),
+            'geolocation': self._generate_geolocation(),
+            'hardware_concurrency': random.choice([4, 6, 8, 12, 16]),
+            'device_memory': random.choice([4, 8, 16, 32]),
+            'max_touch_points': random.choice([0, 1, 5, 10]),
+            'connection': self._generate_connection_info(),
+            'battery': self._generate_battery_info(),
+            'permissions': self._generate_permissions(),
+        }
+        
+        return fingerprint
+    
+    def _generate_canvas_fingerprint(self) -> str:
+        """生成Canvas指纹"""
+        # 模拟Canvas指纹的哈希值
+        canvas_hashes = [
+            'canvas_hash_1234567890abcdef',
+            'canvas_hash_abcdef1234567890',
+            'canvas_hash_9876543210fedcba',
+            'canvas_hash_fedcba0987654321',
+        ]
+        return random.choice(canvas_hashes)
+    
+    def _generate_audio_fingerprint(self) -> str:
+        """生成音频指纹"""
+        # 模拟音频指纹的哈希值
+        audio_hashes = [
+            'audio_hash_1234567890abcdef',
+            'audio_hash_abcdef1234567890',
+            'audio_hash_9876543210fedcba',
+            'audio_hash_fedcba0987654321',
+        ]
+        return random.choice(audio_hashes)
+    
+    def _generate_media_devices(self) -> Dict[str, Any]:
+        """生成媒体设备信息"""
+        return {
+            'audioinput': random.randint(1, 3),
+            'audiooutput': random.randint(1, 2),
+            'videoinput': random.randint(1, 2),
+        }
+    
+    def _generate_geolocation(self) -> Dict[str, float]:
+        """生成地理位置信息"""
+        # 中国主要城市的经纬度范围
+        latitude = random.uniform(18.0, 53.0)  # 中国纬度范围
+        longitude = random.uniform(73.0, 135.0)  # 中国经度范围
+        return {
+            'latitude': round(latitude, 6),
+            'longitude': round(longitude, 6),
+            'accuracy': random.uniform(10, 100),
+        }
+    
+    def _generate_connection_info(self) -> Dict[str, Any]:
+        """生成网络连接信息"""
+        connection_types = ['wifi', '4g', '5g', 'ethernet']
+        return {
+            'type': random.choice(connection_types),
+            'downlink': random.uniform(10, 100),
+            'rtt': random.uniform(10, 100),
+            'effectiveType': random.choice(['slow-2g', '2g', '3g', '4g']),
+        }
+    
+    def _generate_battery_info(self) -> Dict[str, Any]:
+        """生成电池信息"""
+        return {
+            'charging': random.choice([True, False]),
+            'level': random.uniform(0.1, 1.0),
+            'chargingTime': random.randint(0, 3600) if random.choice([True, False]) else float('inf'),
+            'dischargingTime': random.randint(1800, 7200),
+        }
+    
+    def _generate_permissions(self) -> Dict[str, str]:
+        """生成权限信息"""
+        return {
+            'geolocation': random.choice(['granted', 'denied', 'prompt']),
+            'notifications': random.choice(['granted', 'denied', 'prompt']),
+            'camera': random.choice(['granted', 'denied', 'prompt']),
+            'microphone': random.choice(['granted', 'denied', 'prompt']),
         }
         
     def load_fingerprint_from_file(self, cache_dir: str) -> Optional[Dict[str, Any]]:
@@ -170,6 +322,10 @@ class FingerprintManager:
             bool: 保存是否成功
         """
         try:
+            # 确保账号缓存目录存在
+            cache_path = Path(account_cache_dir)
+            cache_path.mkdir(parents=True, exist_ok=True)
+            
             result = self.generator.save_fingerprint_to_file(fingerprint, account_cache_dir)
             if result:
                 self.logger.info(f"已保存账号 {account_cache_dir} 的指纹数据")

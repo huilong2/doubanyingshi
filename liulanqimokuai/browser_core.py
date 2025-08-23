@@ -1,7 +1,7 @@
 import asyncio
 import threading
 from datetime import datetime
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Any
 
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 from fingerprint_manager import FingerprintManager
@@ -127,21 +127,27 @@ class BrowserController:
         try:
             # 启动浏览器/上下文
             self._emit('browser_launch', {'timestamp': datetime.now(), 'message': '正在启动Chrome浏览器...'})
+            
+            # 获取浏览器启动参数和上下文选项
+            browser_args = self._get_browser_args()
+            context_options = self._get_context_options()
+            
             if user_data_dir:
                 self.browser = await self.playwright.chromium.launch_persistent_context(
                     user_data_dir=user_data_dir,
                     executable_path=executable_path,
                     headless=False,
-                    args=['--start-maximized']  # 最大化窗口
+                    args=browser_args,
+                    **context_options
                 )
                 self.context = self.browser  # type: ignore
             else:
                 self.browser = await self.playwright.chromium.launch(
                     executable_path=executable_path,
                     headless=False,
-                    args=['--start-maximized']  # 最大化窗口
+                    args=browser_args
                 )
-                self.context = await self.browser.new_context(viewport={'width': 1920, 'height': 1080})
+                self.context = await self.browser.new_context(**context_options)
             self._emit('browser_launch', {'timestamp': datetime.now(), 'message': 'Chrome浏览器已启动'})
         except Exception as e:
             self._emit('error', {'timestamp': datetime.now(), 'message': f'启动浏览器失败: {str(e)}'})
@@ -178,18 +184,24 @@ class BrowserController:
             # 应用部分指纹（UA/语言）
             if self._fingerprint:
                 self._emit('browser_launch', {'timestamp': datetime.now(), 'message': '正在设置浏览器指纹...'})
-                extra_headers = {}
-                if 'user_agent' in self._fingerprint:
-                    extra_headers['User-Agent'] = self._fingerprint['user_agent']
-                if 'language' in self._fingerprint:
-                    extra_headers['Accept-Language'] = self._fingerprint['language']
-                if extra_headers:
-                    await self.context.set_extra_http_headers(extra_headers)  # type: ignore
+                try:
+                    # 使用统一的指纹提取函数
+                    from utils import extract_fingerprint_headers
+                    extra_headers = extract_fingerprint_headers(self._fingerprint)
+                    if extra_headers:
+                        await self.context.set_extra_http_headers(extra_headers)  # type: ignore
+                except Exception as e:
+                    self._emit('warning', {'timestamp': datetime.now(), 'message': f'应用指纹数据失败: {str(e)}'})
 
             # 导航
             self._emit('browser_launch', {'timestamp': datetime.now(), 'message': f'正在打开页面: {start_url}'})
             async with self._nav_lock:
                 await self.page.goto(start_url, wait_until='domcontentloaded', timeout=30000)
+            
+            # 注入反检测脚本
+            self._emit('browser_launch', {'timestamp': datetime.now(), 'message': '正在注入反检测脚本...'})
+            await self._inject_stealth_scripts()
+            
             self._emit('browser_launch', {'timestamp': datetime.now(), 'message': '页面加载完成'})
             
         except Exception as e:
@@ -284,5 +296,118 @@ class BrowserController:
 
     def guanbi_yemian_tongguo_id(self, page_id: int) -> None:
         self.run_async(self._async_close_tab(page_id))
+
+    def _get_browser_args(self) -> list:
+        """获取浏览器启动参数"""
+        args = [
+            # 基础设置
+            '--disable-blink-features=AutomationControlled',
+            '--disable-web-security',
+            '--disable-features=VizDisplayCompositor',
+            
+            # 反检测参数
+            '--disable-blink-features',
+            '--disable-extensions',
+            '--disable-plugins',
+            '--disable-images',
+            '--disable-javascript',
+            '--disable-default-apps',
+            '--disable-sync',
+            '--disable-translate',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
+            '--disable-features=TranslateUI',
+            '--disable-ipc-flooding-protection',
+            
+            # 隐藏自动化标志
+            '--no-first-run',
+            '--no-default-browser-check',
+            '--disable-default-apps',
+            '--disable-popup-blocking',
+            '--disable-prompt-on-repost',
+            '--disable-hang-monitor',
+            '--disable-client-side-phishing-detection',
+            '--disable-component-update',
+            '--disable-domain-reliability',
+            '--disable-features=AudioServiceOutOfProcess',
+            '--disable-features=VizDisplayCompositor',
+            
+            # 性能优化
+            '--memory-pressure-off',
+            '--max_old_space_size=4096',
+            '--disable-dev-shm-usage',
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-gpu-sandbox',
+            '--disable-software-rasterizer',
+            
+            # 网络设置
+            '--disable-background-networking',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
+            '--disable-features=TranslateUI',
+            '--disable-ipc-flooding-protection',
+            
+            # 用户代理设置
+            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.5615.138 Safari/537.36',
+            
+            # 窗口设置 - 固定为1280x700
+            '--window-size=1280,700',
+            '--window-position=0,0',
+            
+            # 其他设置
+            '--allow-running-insecure-content',
+            '--disable-web-security',
+            '--disable-features=VizDisplayCompositor',
+            '--disable-features=TranslateUI',
+            '--disable-ipc-flooding-protection',
+        ]
+        
+        return args
+
+    def _get_context_options(self) -> dict:
+        """获取浏览器上下文选项"""
+        options = {
+            'viewport': {'width': 1280, 'height': 700},
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.5615.138 Safari/537.36',
+            'locale': 'zh-CN',
+            'timezone_id': 'Asia/Shanghai',
+            'permissions': ['geolocation'],
+            'extra_http_headers': {
+                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache',
+            },
+            'ignore_https_errors': True,
+            'java_script_enabled': True,
+            'has_touch': False,
+            'is_mobile': False,
+            'color_scheme': 'light',
+            'reduced_motion': 'no-preference',
+            'forced_colors': 'none',
+        }
+        
+        return options
+
+    async def _inject_stealth_scripts(self):
+        """注入反检测脚本"""
+        try:
+            from .stealth_scripts import get_stealth_script
+            
+            # 获取所有反检测脚本
+            stealth_script = get_stealth_script()
+            
+            # 注入脚本
+            await self.page.add_init_script(stealth_script)
+            
+            # 等待脚本执行
+            await self.page.wait_for_timeout(1000)
+            
+        except Exception as e:
+            self._emit('warning', {'timestamp': datetime.now(), 'message': f'注入反检测脚本失败: {str(e)}'})
 
 

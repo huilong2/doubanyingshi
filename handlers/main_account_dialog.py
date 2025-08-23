@@ -106,81 +106,14 @@ class MainAccountDialog(BaseDialog):
     
     def show_fingerprint_data(self):
         """显示指纹数据（分项展示并带中文说明）"""
-        try:
-            username = self.username_widget.text()
-            if not username:
-                self.parent().browser_signals.error.emit("无法获取账号信息")
-                return
-            
-            # 从文件系统读取指纹数据
-            cache_path = self.parent().config.get('browser_cache_path', '')
-            # 优先使用配置的缓存路径，如果不存在则使用默认的data目录
-            if cache_path and Path(cache_path).exists():
-                account_dir = Path(cache_path) / username
-            else:
-                # 使用默认的data目录
-                account_dir = Path('data') / username
-            fingerprint_manager = FingerprintManager()
-            fingerprint = fingerprint_manager.load_fingerprint_from_file(str(account_dir))
-            
-            if not fingerprint:
-                self.parent().browser_signals.error.emit("该账号未保存指纹数据")
-                return
-                
-            desc = {
-                'user_agent': '浏览器UA',
-                'screen_width': '屏幕宽度',
-                'screen_height': '屏幕高度',
-                'color_depth': '颜色深度',
-                'timezone': '时区',
-                'language': '语言',
-                'platform': '平台',
-                'webgl_vendor': 'WebGL厂商',
-                'webgl_renderer': 'WebGL渲染器',
-                'fonts': '字体列表',
-                'plugins': '插件列表',
-                'canvas': 'Canvas指纹',
-                'audio': '音频指纹',
-                'media_devices': '多媒体设备',
-                'latitude': '纬度',
-                'longitude': '经度',
-            }
-            from PySide6.QtWidgets import QFormLayout, QLabel, QTextEdit, QDialog, QHBoxLayout, QPushButton
-            dialog = QDialog(self)
-            dialog.setWindowTitle("指纹数据")
-            dialog.setMinimumSize(600, 500)
-            dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
-            layout = QFormLayout(dialog)
-            for key in [
-                'user_agent','screen_width','screen_height','color_depth','timezone','language','platform',
-                'webgl_vendor','webgl_renderer','fonts','plugins','canvas','audio','media_devices','latitude','longitude']:
-                if key in fingerprint:
-                    label = f"{key}（{desc.get(key, key)}）"
-                    value = fingerprint[key]
-                    if isinstance(value, (list, dict)):
-                        value_str = json.dumps(value, ensure_ascii=False, indent=2)
-                        text = QTextEdit()
-                        text.setReadOnly(True)
-                        text.setText(value_str)
-                        layout.addRow(label, text)
-                    else:
-                        layout.addRow(label, QLabel(str(value)))
-            button_layout = QHBoxLayout()
-            close_btn = QPushButton("关闭")
-            close_btn.clicked.connect(dialog.close)
-            button_layout.addWidget(close_btn)
-            layout.addRow(button_layout)
-            dialog.setLayout(layout)
-            
-            # 应用Fluent风格到指纹数据对话框
-            dialog.setStyleSheet(FINGERPRINT_DIALOG_STYLE)
-            dialog.exec()
-        except Exception as e:
-            error_msg = f"显示指纹数据失败: {str(e)}"
-            import logging
-            logger = logging.getLogger("MainAccountDialog")
-            logger.error(error_msg)
-            self.parent().browser_signals.error.emit(error_msg)
+        username = self.username_widget.text()
+        if not username:
+            self.parent().browser_signals.error.emit("无法获取账号信息")
+            return
+        
+        # 使用统一的工具函数显示指纹数据
+        from utils import show_fingerprint_dialog
+        show_fingerprint_dialog(self, username)
     
     def get_data(self):
         """

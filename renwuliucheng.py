@@ -13,9 +13,12 @@ from liulanqi_gongcaozuo import LiulanqiGongcaozuo, LiulanqiPeizhi
 from douban_utils import DoubanUtils
 import logging
 
+# 导入全局变量
+from bianlian_dingyi import DOUBAN_URL
+
 logger = logging.getLogger(__name__)
 
-# 仅格式化本模块内以“[流程]”开头的打印为带时间的终端输出
+# 仅格式化本模块内以"[流程]"开头的打印为带时间的终端输出
 _orig_print = _builtins.print
 def _flow_print(*args, **kwargs):
     try:
@@ -64,7 +67,7 @@ class RenwuLiucheng:
             print("[流程] 浏览器初始化成功")
             
             # 3. 打开豆瓣网站
-            douban_url = "https://www.douban.com"
+            douban_url = DOUBAN_URL
             await self.liulanqi.dakai_ye(douban_url)
             print("[流程] 豆瓣网站加载成功")
             
@@ -108,14 +111,22 @@ class RenwuLiucheng:
     async def _huoqu_douban_zhanghaoxinxi(self) -> Optional[Dict[str, Any]]:
         """获取豆瓣账号信息"""
         try:
-            if not self.liulanqi or not self.liulanqi.page:
+            if not self.liulanqi or not self.liulanqi.controller.page:
                 return None
                 
-            # 使用统一的JavaScript代码获取用户信息
-            # 通过新模块封装的脚本执行，避免直接跨事件循环
-            user_info = await self.liulanqi.zhixing_script(self.get_douban_user_info_script())
+            # 使用统一的用户信息获取脚本
+            user_info_future = self.liulanqi.controller.run_async(
+                self.liulanqi.controller.page.evaluate(DoubanUtils.get_user_info_script())
+            )
+            user_info = user_info_future.result(timeout=10)
             
-            print(f"[流程] 获取到的用户信息: {user_info}")
+            if user_info:
+                print(f"[流程] 获取到的用户信息: {user_info}")
+                
+                # 更新数据库
+                if self.db_manager:
+                    self._gengxin_zhanghaoxinxi(user_info)
+                    
             return user_info
             
         except Exception as e:
@@ -124,52 +135,23 @@ class RenwuLiucheng:
     
     async def _chuli_denglu_moshi(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """处理登录模式"""
-        print("[流程] 进入登录模式 - 等待手动操作")
-        result["message"] = "浏览器已启动，等待手动操作"
-        
-        # 更新数据库中的账号状态
-        if self.db_manager and self.liulanqi:
-            await self._gengxin_zhanghaozhuangtai(result["user_info"], "运行中")
-        
+        if result["login_status"] == "已登录":
+            print("[流程] 进入登录模式 - 等待手动操作")
+            result["message"] = "浏览器已启动，等待手动操作"
+        else:
+            print("[流程] 未登录状态 - 等待手动登录")
+            result["message"] = "浏览器已启动，请手动登录"
         return result
     
     async def _chuli_gengxin_moshi(self, result: Dict[str, Any], peizhi: LiulanqiPeizhi) -> Dict[str, Any]:
         """处理更新模式"""
-        print("[流程] 进入更新模式")
-        
         if result["login_status"] == "已登录":
-            print("[流程] 账号已登录，更新信息")
-            result["message"] = "账号已登录，信息已更新"
-            result["success"] = True
-            
-            # 更新数据库中的账号信息
-            if self.db_manager:
-                await self._gengxin_zhanghaozhuangtai(result["user_info"], "已登录")
-                
+            print("[流程] 进入更新模式 - 开始更新账号信息")
+            # 这里可以添加具体的更新逻辑
+            result["message"] = "账号信息更新完成"
         else:
-            print("[流程] 账号未登录，开始自动登录")
-            login_result = await self._zidong_denglu(peizhi)
-            
-            if login_result["success"]:
-                # 重新获取用户信息
-                user_info = await self._huoqu_douban_zhanghaoxinxi()
-                result["user_info"] = user_info
-                result["login_status"] = "已登录" if user_info and user_info.get("id") else "登录失败"
-                
-                if result["login_status"] == "已登录":
-                    result["message"] = "自动登录成功，信息已更新"
-                    result["success"] = True
-                    
-                    # 更新数据库
-                    if self.db_manager:
-                        await self._gengxin_zhanghaozhuangtai(user_info, result["login_status"])
-                else:
-                    result["message"] = "自动登录失败，无法获取用户信息"
-                    result["success"] = False
-            else:
-                result["message"] = f"自动登录失败: {login_result['message']}"
-                result["success"] = False
-        
+            print("[流程] 未登录状态 - 无法更新")
+            result["message"] = "未登录状态，无法更新账号信息"
         return result
     
     async def _zidong_denglu(self, peizhi: LiulanqiPeizhi) -> Dict[str, Any]:
@@ -288,70 +270,43 @@ class RenwuLiucheng:
                 print(f"[流程] 等待登录完成时出错: {e}")
                 break
     
-    async def gengxin_zhanghaoxinxi(self, username: str, user_info: Optional[Dict[str, Any]] = None, running_status: str = "运行中") -> bool:
-        """
-        统一的账号信息更新方法
-        
-        Args:
-            username: 用户名
-            user_info: 用户信息字典，如果为None则自动获取
-            running_status: 运行状态
-            
-        Returns:
-            bool: 更新是否成功
-        """
-        if not self.db_manager:
-            return False
-            
+    def _gengxin_zhanghaoxinxi(self, user_info: Dict[str, Any]):
+        """更新账号信息到数据库"""
         try:
-            # 如果没有提供用户信息，尝试自动获取
-            if user_info is None and self.liulanqi and self.liulanqi.page:
-                user_info = await self._huoqu_douban_zhanghaoxinxi()
-            
-            # 获取当前cookies
-            cookie_str = ""
-            if self.liulanqi and self.liulanqi.page:
-                try:
-                    cookies = await self.liulanqi.page.context.cookies()
-                    cookie_str = '; '.join([f"{cookie['name']}={cookie['value']}" for cookie in cookies])
-                except Exception as e:
-                    logger.warning(f"获取cookies失败: {str(e)}")
-            
-            # 查找并更新账号
+            if not self.db_manager:
+                return
+                
             accounts = self.db_manager.get_accounts()
             for account in accounts:
-                if account[1] == username:
+                if account[1] == self.liulanqi.peizhi.zhanghao:
+                    # 创建用户信息字典用于数据库更新
+                    user_info_for_db = {
+                        'login_status': user_info.get('login_status', '未知'),
+                        'name': user_info.get('name'),
+                        'id': user_info.get('id')
+                    }
+                    
                     # 使用工具类创建标准化的账号数据
                     account_data = DoubanUtils.create_account_data(
-                        account, user_info, cookie_str, running_status
+                        account, user_info_for_db, account[3], '运行中'
                     )
                     
-                    # 调试输出
-                    DoubanUtils.print_account_debug_info(account_data, "流程-数据库更新")
-                    
-                    return self.db_manager.update_account(account[0], account_data)
-            
-            logger.warning(f"未找到用户名为 {username} 的账号")
-            return False
+                    # 更新数据库
+                    self.db_manager.update_account(account[0], account_data)
+                    print("账号信息已更新")
+                    break
                     
         except Exception as e:
-            logger.error(f"更新账号状态失败: {str(e)}")
-            return False
+            logger.error(f"更新账号信息失败: {str(e)}")
 
-    async def _gengxin_zhanghaozhuangtai(self, user_info: Optional[Dict[str, Any]], running_status: str):
-        """更新数据库中的账号状态（兼容性方法）"""
-        if not self.liulanqi:
-            return
-        return await self.gengxin_zhanghaoxinxi(self.liulanqi.peizhi.zhanghao, user_info, running_status)
-    
     async def guanbi_liulanqi(self):
         """关闭浏览器"""
-        if self.liulanqi:
-            try:
+        try:
+            if self.liulanqi:
                 await self.liulanqi.guanbi()
                 print("[流程] 浏览器已关闭")
-            except Exception as e:
-                logger.error(f"关闭浏览器失败: {str(e)}")
+        except Exception as e:
+            logger.error(f"关闭浏览器失败: {str(e)}")
 
 
 # 使用示例函数
@@ -362,7 +317,7 @@ async def zhixing_liucheng_example():
     peizhi = LiulanqiPeizhi(
         zhanghao="your_username",
         mima="your_password",
-        huanchunlujing="./browser_data",
+        huanchunlujing="E:/liulanqi/example_user",  # 示例缓存路径
         # 其他配置...
     )
     
