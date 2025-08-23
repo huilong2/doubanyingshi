@@ -330,15 +330,7 @@ class AccountManagerWindow(QMainWindow):
         self.open_browser_btn = QPushButton("打开浏览器")
         self.open_browser_btn.setMinimumSize(90, 32)  # 缩小宽度
         
-        self.open_browser2_btn = QPushButton("打开浏览器2")
-        self.open_browser2_btn.setMinimumSize(90, 32)  # 缩小宽度
 
-        # 新增：关闭浏览器按钮
-        self.close_browser_btn = QPushButton("关闭浏览器")
-        self.close_browser_btn.setMinimumSize(90, 32)
-        
-        self.update_browser_btn = QPushButton("更新账号")
-        self.update_browser_btn.setMinimumSize(80, 32)  # 缩小宽度
         
         self.add_proxy_btn = QPushButton("添加代理")
         self.add_proxy_btn.setMinimumSize(80, 32)  # 缩小宽度
@@ -351,9 +343,6 @@ class AccountManagerWindow(QMainWindow):
         self.edit_account_btn.clicked.connect(self.edit_account)
         self.delete_account_btn.clicked.connect(self.delete_account)
         self.open_browser_btn.clicked.connect(self.open_browser)
-        self.open_browser2_btn.clicked.connect(self.open_browser2)
-        self.close_browser_btn.clicked.connect(self.close_browser)
-        self.update_browser_btn.clicked.connect(self.update_account)
         self.add_proxy_btn.clicked.connect(self.add_proxy)
         self.remove_proxy_btn.clicked.connect(self.remove_proxy)
         
@@ -364,9 +353,6 @@ class AccountManagerWindow(QMainWindow):
         account_btn_layout.addWidget(self.edit_account_btn)
         account_btn_layout.addWidget(self.delete_account_btn)
         account_btn_layout.addWidget(self.open_browser_btn)
-        account_btn_layout.addWidget(self.open_browser2_btn)
-        account_btn_layout.addWidget(self.close_browser_btn)
-        account_btn_layout.addWidget(self.update_browser_btn)
         account_btn_layout.addWidget(self.add_proxy_btn)
         account_btn_layout.addWidget(self.remove_proxy_btn)
         account_btn_layout.addStretch()
@@ -1178,54 +1164,7 @@ class AccountManagerWindow(QMainWindow):
             loop.close()
         threading.Thread(target=run, daemon=True).start()
     
-    def open_browser2(self):
-        """打开浏览器2（更新模式）"""
-        def run():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(self._safe_open_browser("gengxin"))
-            loop.close()
-        threading.Thread(target=run, daemon=True).start()
 
-    def close_browser(self):
-        """关闭当前选中账号的浏览器"""
-        try:
-            selected_items = self.account_table.selectedItems()
-            if not selected_items:
-                self.browser_signals.error.emit("请选择要关闭浏览器的账号")
-                return
-            username = self.account_table.item(selected_items[0].row(), 2).text()
-            session = self.active_browser_sessions.get(username)
-            if not session:
-                self.browser_signals.error.emit("该账号没有正在运行的浏览器")
-                return
-            liulanqi = session.get('liulanqi')
-            if not liulanqi:
-                self.browser_signals.error.emit("未找到浏览器实例")
-                return
-
-            def run_close():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(liulanqi.guanbi())
-                finally:
-                    loop.close()
-                # 主线程上清理会话并刷新
-                QTimer.singleShot(0, lambda: self.handle_browser_closed(username))
-
-            threading.Thread(target=run_close, daemon=True).start()
-        except Exception as e:
-            self.browser_signals.error.emit(f"关闭浏览器失败: {str(e)}")
-    
-    def update_account(self):
-        """更新账号（更新模式）"""
-        def run():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(self._safe_open_browser("gengxin"))
-            loop.close()
-        threading.Thread(target=run, daemon=True).start()
 
     async def _safe_open_browser(self, zhixingmoshi="denglu"):
         """

@@ -368,36 +368,37 @@ def on_run_start_clicked_handler(window):
     
     if selected_mode == "指定电影评论评星":
         print("🔍 DEBUG: 选择了'指定电影评论评星'，开始执行...")
+        QMessageBox.information(window, "提示", "指定电影评论评星——功能待实现")
         # 执行指定电影评论评星功能
-        try:
-            print("🔍 DEBUG: 正在导入zhixingliucheng模块...")
-            # 导入执行流程模块
-            from zhixingliucheng import suijidianyingpinglunpingxing
+        # try:
+        #     print("🔍 DEBUG: 正在导入zhixingliucheng模块...")
+        #     # 导入执行流程模块
+        #     from zhixingliucheng import suijidianyingpinglunpingxing
             
-            print("🔍 DEBUG: 模块导入成功，开始调用函数...")
-            # 获取当前选中的分组名称
-            selected_group = window.get_selected_group_name()
-            print(f"🔍 DEBUG: 使用分组: {selected_group}")
+        #     print("🔍 DEBUG: 模块导入成功，开始调用函数...")
+        #     # 获取当前选中的分组名称
+        #     selected_group = window.get_selected_group_name()
+        #     print(f"🔍 DEBUG: 使用分组: {selected_group}")
             
-            # 执行功能（异步函数）
-            import asyncio
-            result = asyncio.run(suijidianyingpinglunpingxing(selected_group))
+        #     # 执行功能（异步函数）
+        #     import asyncio
+        #     result = asyncio.run(suijidianyingpinglunpingxing(selected_group))
             
-            print(f"🔍 DEBUG: 函数执行完成，返回值: {result}")
+        #     print(f"🔍 DEBUG: 函数执行完成，返回值: {result}")
             
-            if result and len(result) > 0:
-                content_data, movies_data = result
-                print(f"🔍 DEBUG: 处理了 {len(content_data)} 个内容和 {len(movies_data)} 个电影")
-                QMessageBox.information(window, "成功", f"执行完成！\n处理了 {len(content_data)} 个内容和 {len(movies_data)} 个电影")
-            else:
-                print("🔍 DEBUG: 没有数据需要处理或执行失败")
-                QMessageBox.warning(window, "警告", "没有数据需要处理或执行失败")
+        #     if result and len(result) > 0:
+        #         content_data, movies_data = result
+        #         print(f"🔍 DEBUG: 处理了 {len(content_data)} 个内容和 {len(movies_data)} 个电影")
+        #         QMessageBox.information(window, "成功", f"执行完成！\n处理了 {len(content_data)} 个内容和 {len(movies_data)} 个电影")
+        #     else:
+        #         print("🔍 DEBUG: 没有数据需要处理或执行失败")
+        #         QMessageBox.warning(window, "警告", "没有数据需要处理或执行失败")
                 
-        except Exception as e:
-            print(f"🔍 DEBUG: 执行过程中出现错误: {str(e)}")
-            QMessageBox.critical(window, "错误", f"执行过程中出现错误：{str(e)}")
-            import traceback
-            print(f"错误详情：{traceback.format_exc()}")
+        # except Exception as e:
+        #     print(f"🔍 DEBUG: 执行过程中出现错误: {str(e)}")
+        #     QMessageBox.critical(window, "错误", f"执行过程中出现错误：{str(e)}")
+        #     import traceback
+        #     print(f"错误详情：{traceback.format_exc()}")
     
     elif selected_mode == "随机评论":
         print("🔍 DEBUG: 选择了'随机评论'")
