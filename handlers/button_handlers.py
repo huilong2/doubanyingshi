@@ -258,37 +258,66 @@ def add_proxy_handler(window):
 
 def remove_proxy_handler(window):
     """删除代理处理函数"""
-    # 获取选中的账号
-    selected_items = window.account_table.selectedItems()
-    if not selected_items:
-        QMessageBox.warning(window, "警告", "请选择要删除代理的账号")
+    # 获取选中行的账号（基于复选框状态）
+    selected_rows = set()
+    for row in range(window.account_table.rowCount()):
+        checkbox_item = window.account_table.item(row, 0)
+        if checkbox_item and checkbox_item.checkState() == Qt.CheckState.Checked:
+            selected_rows.add(row)
+    
+    if not selected_rows:
+        QMessageBox.warning(window, "警告", "请先勾选要删除代理的账号")
         return
     
-    # 获取选中行的账号数据
-    row = selected_items[0].row()
-    account_data = window.data_manager.load_accounts()
-    if not account_data or row >= len(account_data):
+    # 获取账号数据
+    account_data = window.data_manager.get_accounts()
+    if not account_data or len(account_data) == 0:
         return
     
-    # 检查是否已有代理
-    if not account_data[row].get('proxy', ''):
-        QMessageBox.information(window, "提示", "该账号未设置代理")
+    # 检查是否有账号设置了代理
+    has_proxy = False
+    for row in selected_rows:
+        if row < len(account_data) and account_data[row][9]:  # 第10列是代理IP列
+            has_proxy = True
+            break
+    
+    if not has_proxy:
+        QMessageBox.information(window, "提示", "选中的账号均未设置代理")
         return
     
     # 确认删除
-    reply = QMessageBox.question(window, "确认删除", "确定要删除该账号的代理吗？")
+    reply = QMessageBox.question(window, "确认删除", f"确定要删除这 {len(selected_rows)} 个账号的代理吗？")
     if reply == QMessageBox.StandardButton.Yes:
+        success_count = 0
         # 清除代理信息
-        account_data[row]['proxy'] = ''
+        for row in selected_rows:
+            if row < len(account_data):
+                # 检查是否已有代理
+                if account_data[row][9]:  # 第10列是代理IP列
+                    # 获取账号ID（第一列）
+                    account_id = account_data[row][0]
+                    # 更新数据库中的代理信息
+                    if window.data_manager.update_account(account_id, {
+                        'username': account_data[row][1],
+                        'password': account_data[row][2] or '',
+                        'ck': account_data[row][3] or '',
+                        'nickname': account_data[row][4] or '',
+                        'account_id': account_data[row][5] or '',
+                        'login_status': account_data[row][6] or '',
+                        'homepage': account_data[row][7] or '',
+                        'login_time': account_data[row][8] or '',
+                        'proxy': '',  # 清空代理
+                        'running_status': account_data[row][10] or '',
+                        'note': account_data[row][11] or ''
+                    }):
+                        success_count += 1
         
-        # 保存更新后的账号数据
-        if window.data_manager.save_accounts(account_data):
-            # 更新表格显示
-            proxy_item = QTableWidgetItem('')
-            window.account_table.setItem(row, 3, proxy_item)
-            QMessageBox.information(window, "成功", "代理删除成功")
-        else:
-            QMessageBox.warning(window, "失败", "代理删除失败")
+        # 更新表格显示
+        for row in selected_rows:
+            if row < window.account_table.rowCount():
+                proxy_item = QTableWidgetItem('')
+                window.account_table.setItem(row, 9, proxy_item)  # 第10列是代理IP列
+        QMessageBox.information(window, "成功", f"成功为 {success_count} 个账号删除代理")
 
 def clear_all_movies_handler(window):
     """清空所有电影处理函数"""
