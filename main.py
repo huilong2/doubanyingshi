@@ -40,7 +40,7 @@ from handlers.button_handlers import (
     update_movie_rating_handler
 )
 # 导入统一的UI组件
-from ui.dialogs import BaseDialog, AccountDialog, GroupDialog
+from ui.dialogs import BaseDialog, AccountDialog
 
 # 配置日志
 def setup_logging():
@@ -116,7 +116,7 @@ class AccountManagerWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.data_manager = DataManager()
-        self.group_table = QTableWidget()    # 只在这里创建一次
+        # 分组表相关组件已删除
         self.account_table = QTableWidget()  # 只在这里创建一次
         self.config = {}
         self.browser_signals = BrowserSignals()
@@ -126,9 +126,7 @@ class AccountManagerWindow(QMainWindow):
 
         self.active_browser_sessions = {} # Store {username: {'thread': Thread, 'stop_event': Event, 'liulanqi': Liulanqi_instance}}
         
-        # 初始化分组选择状态跟踪
-        self.group_selected = False
-        self.selected_group_name = None
+        # 分组选择状态跟踪已删除
         
         self.load_config()
         self.init_ui()
@@ -223,67 +221,37 @@ class AccountManagerWindow(QMainWindow):
     def init_account_tab(self):
         """初始化账号管理标签页"""
         account_tab = QWidget()
-        layout = QHBoxLayout()
+        layout = QVBoxLayout()  # 改为垂直布局，因为不再需要左右分割
         layout.setSpacing(10)
         layout.setContentsMargins(5, 5, 5, 5)
         
-        # 分组管理（左侧）
-        group_widget = QWidget()
-        group_layout = QVBoxLayout(group_widget)
-        group_layout.setSpacing(10)
-        group_layout.setContentsMargins(5, 5, 5, 5)
-        
-        # 分组表格表头设置
-        self.group_table.setColumnCount(1)
-        self.group_table.setHorizontalHeaderLabels(["分组名称"])
-        self.group_table.horizontalHeader().setStretchLastSection(True)
-        self.group_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.group_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.group_table.verticalHeader().setVisible(False)
-        self.group_table.setMinimumWidth(180)
-        
-        # 设置分组表格样式优化
-        self.group_table.setAlternatingRowColors(True)  # 交替行颜色
-        self.group_table.setShowGrid(True)  # 显示网格线
-        self.group_table.setGridStyle(Qt.PenStyle.SolidLine)  # 实线网格
-        group_layout.addWidget(self.group_table)
-        
-        # 分组按钮
-        group_btn_layout = QHBoxLayout()
-        group_btn_layout.setSpacing(10)
-        group_btn_layout.addWidget(self.create_button("添加", self.add_group))
-        group_btn_layout.addWidget(self.create_button("删除", self.delete_group))
-        group_layout.addLayout(group_btn_layout)
-        group_widget.setMaximumWidth(220)
-        
-        # 账号管理（右侧）
+        # 账号管理（占满整个区域）
         account_widget = QWidget()
         account_layout = QVBoxLayout(account_widget)
         account_layout.setSpacing(10)
         account_layout.setContentsMargins(5, 5, 5, 5)
         
         # 账号表格表头设置
-        self.account_table.setColumnCount(13)
+        self.account_table.setColumnCount(12)
         self.account_table.setHorizontalHeaderLabels([
-            "选择", "分组", "账号", "密码", "CK", "账号昵称", "账号ID", 
+            "选择", "账号", "密码", "CK", "账号昵称", "账号ID", 
             "登录状态", "主页地址", "登录时间", "代理IP", "运行状态", "备注"
         ])
         
         # 设置列宽
         column_widths = {
             0: 50,   # 选择（复选框列）
-            1: 100,  # 分组
-            2: 150,  # 账号
-            3: 80,   # 密码
-            4: 80,   # CK
-            5: 120,  # 账号昵称
-            6: 100,  # 账号ID
-            7: 100,  # 登录状态
-            8: 100,  # 主页地址
-            9: 150,  # 登录时间
-            10: 120, # 代理IP
-            11: 100, # 运行状态
-            12: 80   # 备注
+            1: 150,  # 账号
+            2: 80,   # 密码
+            3: 80,   # CK
+            4: 120,  # 账号昵称
+            5: 100,  # 账号ID
+            6: 100,  # 登录状态
+            7: 100,  # 主页地址
+            8: 150,  # 登录时间
+            9: 120,  # 代理IP
+            10: 100, # 运行状态
+            11: 80   # 备注
         }
         
         for col, width in column_widths.items():
@@ -359,9 +327,8 @@ class AccountManagerWindow(QMainWindow):
         
         account_layout.addLayout(account_btn_layout)
         
-        # 合并布局
-        layout.addWidget(group_widget)
-        layout.addWidget(account_widget, 1)
+        # 设置布局
+        layout.addWidget(account_widget)
         account_tab.setLayout(layout)
         return account_tab
     
@@ -838,12 +805,7 @@ class AccountManagerWindow(QMainWindow):
 
     def load_data(self):
         """加载数据"""
-        # 加载分组数据
-        groups = self.data_manager.get_groups()
-        self.group_table.setRowCount(len(groups))
-        for i, group in enumerate(groups):
-            self.group_table.setItem(i, 0, QTableWidgetItem(group))
-        self.group_table.itemSelectionChanged.connect(self.on_group_selected)
+        # 分组数据加载已删除
         
         # 加载账号数据
         self.load_accounts()
@@ -851,19 +813,7 @@ class AccountManagerWindow(QMainWindow):
         # 加载电影和内容数据
         self.load_movies_and_contents()
     
-    def on_group_selected(self):
-        """处理分组选择变化"""
-        selected = self.group_table.selectedItems()
-        if selected:
-            self.group_selected = True
-            self.selected_group_name = selected[0].text()
-            print(f"✅ 已选择分组: {self.selected_group_name}")
-            self.load_accounts(selected[0].text())
-        else:
-            self.group_selected = False
-            self.selected_group_name = None
-            print(f"⚠️ 未选择任何分组")
-            self.load_accounts()
+    # 分组选择相关方法已删除
     
     def on_account_checkbox_clicked(self, row, column):
         """处理账号复选框点击事件"""
@@ -878,7 +828,7 @@ class AccountManagerWindow(QMainWindow):
                 # 更新数据库中的勾选状态
                 try:
                     # 获取账号ID（存储在账号列的UserRole中）
-                    account_id = self.account_table.item(row, 2).data(Qt.ItemDataRole.UserRole)
+                    account_id = self.account_table.item(row, 1).data(Qt.ItemDataRole.UserRole)
                     if account_id:
                         # 转换勾选状态为数据库值
                         gouxuan_value = 1 if new_state == Qt.CheckState.Checked else 0
@@ -896,8 +846,8 @@ class AccountManagerWindow(QMainWindow):
         for row in range(self.account_table.rowCount()):
             checkbox_item = self.account_table.item(row, 0)
             if checkbox_item and checkbox_item.checkState() == Qt.CheckState.Checked:
-                username = self.account_table.item(row, 2).text()
-                account_id = self.account_table.item(row, 2).data(Qt.ItemDataRole.UserRole)
+                username = self.account_table.item(row, 1).text()
+                account_id = self.account_table.item(row, 1).data(Qt.ItemDataRole.UserRole)
                 selected_accounts.append({
                     'row': row,
                     'username': username,
@@ -905,13 +855,7 @@ class AccountManagerWindow(QMainWindow):
                 })
         return selected_accounts
     
-    def is_group_selected(self):
-        """检查是否已选择分组"""
-        return self.group_selected
-    
-    def get_selected_group_name(self):
-        """获取当前选中的分组名称"""
-        return self.selected_group_name
+    # 分组状态检查方法已删除
     
     def select_all_accounts(self, select=True):
         """全选或取消全选所有账号"""
@@ -922,7 +866,7 @@ class AccountManagerWindow(QMainWindow):
                 
                 # 更新数据库中的勾选状态
                 try:
-                    account_id = self.account_table.item(row, 2).data(Qt.ItemDataRole.UserRole)
+                    account_id = self.account_table.item(row, 1).data(Qt.ItemDataRole.UserRole)
                     if account_id:
                         gouxuan_value = 1 if select else 0
                         if self.data_manager.update_account_gouxuan(account_id, gouxuan_value):
@@ -932,38 +876,37 @@ class AccountManagerWindow(QMainWindow):
                 except Exception as e:
                     logger.error(f"处理账号全选状态更新时出错: {str(e)}")
     
-    def load_accounts(self, group_name=None):
+    def load_accounts(self):
         """加载账号数据"""
-        accounts = self.data_manager.get_accounts(group_name)
+        accounts = self.data_manager.get_accounts()
         self.account_table.setRowCount(len(accounts))
 
         for i, account in enumerate(accounts):
-            # account字段顺序: id, username, password, ck, nickname, account_id, login_status, homepage, login_time, proxy, running_status, note, group_name
+            # account字段顺序: id, username, password, ck, nickname, account_id, login_status, homepage, login_time, proxy, running_status, note, gouxuan
             
             # 第一列添加复选框
             checkbox_item = QTableWidgetItem()
-            # 恢复之前保存的勾选状态（account[13]是gouxuan字段）
-            gouxuan_state = account[13] if len(account) > 13 else 0
+            # 恢复之前保存的勾选状态（account[12]是gouxuan字段）
+            gouxuan_state = account[12] if len(account) > 12 else 0
             checkbox_item.setCheckState(Qt.CheckState.Checked if gouxuan_state == 1 else Qt.CheckState.Unchecked)
             checkbox_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.account_table.setItem(i, 0, checkbox_item)
             
-            # 其他列数据
-            self.account_table.setItem(i, 1, QTableWidgetItem(account[12] or ''))  # 分组
-            self.account_table.setItem(i, 2, QTableWidgetItem(account[1] or ''))   # 账号
-            self.account_table.setItem(i, 3, QTableWidgetItem(account[2] or ''))   # 密码
-            self.account_table.setItem(i, 4, QTableWidgetItem(account[3] or ''))   # CK
-            self.account_table.setItem(i, 5, QTableWidgetItem(account[4] or ''))   # 账号昵称
-            self.account_table.setItem(i, 6, QTableWidgetItem(account[5] or ''))   # 账号ID
-            self.account_table.setItem(i, 7, QTableWidgetItem(account[6] or ''))   # 登录状态
-            self.account_table.setItem(i, 8, QTableWidgetItem(account[7] or ''))   # 主页地址
-            self.account_table.setItem(i, 9, QTableWidgetItem(account[8] or ''))   # 登录时间
-            self.account_table.setItem(i, 10, QTableWidgetItem(account[9] or ''))   # 代理IP
-            self.account_table.setItem(i, 11, QTableWidgetItem(account[10] or '')) # 运行状态
-            self.account_table.setItem(i, 12, QTableWidgetItem(account[11] or '')) # 备注
+            # 其他列数据（删除分组列）
+            self.account_table.setItem(i, 1, QTableWidgetItem(account[1] or ''))   # 账号
+            self.account_table.setItem(i, 2, QTableWidgetItem(account[2] or ''))   # 密码
+            self.account_table.setItem(i, 3, QTableWidgetItem(account[3] or ''))   # CK
+            self.account_table.setItem(i, 4, QTableWidgetItem(account[4] or ''))   # 账号昵称
+            self.account_table.setItem(i, 5, QTableWidgetItem(account[5] or ''))   # 账号ID
+            self.account_table.setItem(i, 6, QTableWidgetItem(account[6] or ''))   # 登录状态
+            self.account_table.setItem(i, 7, QTableWidgetItem(account[7] or ''))   # 主页地址
+            self.account_table.setItem(i, 8, QTableWidgetItem(account[8] or ''))   # 登录时间
+            self.account_table.setItem(i, 9, QTableWidgetItem(account[9] or ''))   # 代理IP
+            self.account_table.setItem(i, 10, QTableWidgetItem(account[10] or '')) # 运行状态
+            self.account_table.setItem(i, 11, QTableWidgetItem(account[11] or '')) # 备注
             
-            # 保存账号ID到第二列（账号列）的UserRole中
-            self.account_table.item(i, 2).setData(Qt.ItemDataRole.UserRole, account[0])
+            # 保存账号ID到第一列（账号列）的UserRole中
+            self.account_table.item(i, 1).setData(Qt.ItemDataRole.UserRole, account[0])
             
             # 设置行高
             self.account_table.setRowHeight(i, 36)
@@ -986,39 +929,7 @@ class AccountManagerWindow(QMainWindow):
         """删除所有勾选的账号（基于复选框状态）"""
         delete_account_handler(self)
     
-    def add_group(self):
-        """添加分组"""
-        dialog = GroupDialog(self)
-        if dialog.exec():
-            group_name = dialog.get_data()
-            if group_name:
-                if self.data_manager.add_group(group_name):
-                    self.load_data()
-                else:
-                    self.browser_signals.error.emit("添加分组失败")
-    
-    def delete_group(self):
-        """删除分组"""
-        selected_items = self.group_table.selectedItems()
-        if not selected_items:
-            self.browser_signals.error.emit("请选择要删除的分组")
-            return
-        
-        group_name = selected_items[0].text()
-        if group_name == "默认分组":
-            self.browser_signals.error.emit("不能删除默认分组")
-            return
-        
-        reply = QMessageBox.question(
-            self, "确认", f"确定要删除分组 '{group_name}' 吗？\n该分组下的账号将移至默认分组",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        
-        if reply == QMessageBox.StandardButton.Yes:
-            if self.data_manager.delete_group(group_name):
-                self.load_data()
-            else:
-                self.browser_signals.error.emit("删除分组失败")
+    # 分组管理方法已删除
     
     def save_settings(self):
         """保存设置"""

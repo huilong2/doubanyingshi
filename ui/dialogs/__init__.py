@@ -4,6 +4,6 @@
 """
 
 from .base_dialog import BaseDialog
-from .account_dialog import AccountDialog, GroupDialog
+from .account_dialog import AccountDialog
 
-__all__ = ['BaseDialog', 'AccountDialog', 'GroupDialog']
+__all__ = ['BaseDialog', 'AccountDialog']

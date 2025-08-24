@@ -64,8 +64,7 @@ class DatabaseTest:
                 'login_time': '',
                 'proxy': '',
                 'running_status': '空闲',
-                'note': 'Test account for testing',
-                'group_name': '测试分组'
+                'note': 'Test account for testing'
             }
             
             # 添加测试账号
@@ -93,22 +92,7 @@ class DatabaseTest:
             print(f"❌ 账号操作测试失败: {str(e)}")
             return False
     
-    def test_groups_operations(self):
-        """测试分组操作功能"""
-        print("\n=== 测试分组操作功能 ===")
-        try:
-            # 获取现有分组
-            groups = self.data_manager.get_groups()
-            print(f"✅ 获取分组成功，共有 {len(groups)} 个分组")
-            
-            for group in groups[:5]:  # 只显示前5个分组
-                print(f"  - {group}")
-            
-            return True
-            
-        except Exception as e:
-            print(f"❌ 分组操作测试失败: {str(e)}")
-            return False
+    # 分组操作测试已删除
 
 
 class BrowserTest:
@@ -213,7 +197,7 @@ def main():
     db_test = DatabaseTest()
     test_results['数据库连接'] = db_test.test_database_connection()
     test_results['账号操作'] = db_test.test_account_operations()
-    test_results['分组操作'] = db_test.test_groups_operations()
+    # 分组操作测试已删除
     
     # 浏览器测试
     browser_test = BrowserTest()

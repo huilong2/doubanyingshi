@@ -5,6 +5,6 @@ UI模块
 
 # 导出主要的对话框类，方便外部使用
 from .dialogs.base_dialog import BaseDialog
-from .dialogs.account_dialog import AccountDialog, GroupDialog
+from .dialogs.account_dialog import AccountDialog
 
-__all__ = ['BaseDialog', 'AccountDialog', 'GroupDialog']
+__all__ = ['BaseDialog', 'AccountDialog']

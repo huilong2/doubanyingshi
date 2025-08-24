@@ -58,13 +58,7 @@ class DataManager:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # 创建分组表
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS groups (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL
-        )
-        ''')
+        # 分组表已删除
         
         # 创建账号表
         cursor.execute('''
@@ -81,9 +75,7 @@ class DataManager:
             proxy TEXT,
             running_status TEXT,
             note TEXT,
-            group_name TEXT,
-            gouxuan INTEGER DEFAULT 0,
-            FOREIGN KEY (group_name) REFERENCES groups(name)
+            gouxuan INTEGER DEFAULT 0
         )
         ''')
         
@@ -108,8 +100,7 @@ class DataManager:
         )
         ''')
         
-        # 确保默认分组存在
-        cursor.execute('INSERT OR IGNORE INTO groups (name) VALUES (?)', ('默认分组',))
+        # 默认分组逻辑已删除
         
         # 检查并添加gouxuan字段到accounts表（如果不存在）
         try:
@@ -198,73 +189,15 @@ class DataManager:
             logger.error(f"加载配置数据失败: {str(e)}")
             return {}
     
-    # ==================== 分组管理方法 ====================
-    
-    def get_groups(self):
-        """获取所有分组"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('SELECT name FROM groups')
-        groups = [row[0] for row in cursor.fetchall()]
-        conn.close()
-        return groups
-    
-    def add_group(self, group_name):
-        """添加分组"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        try:
-            cursor.execute('INSERT INTO groups (name) VALUES (?)', (group_name,))
-            conn.commit()
-            conn.close()
-            return True
-        except sqlite3.IntegrityError:
-            return False
-    
-    def delete_group(self, group_name):
-        """删除分组，将该分组下的账号移至默认分组"""
-        if group_name == '默认分组':
-            return False
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        try:
-            # 开始事务
-            cursor.execute('BEGIN TRANSACTION')
-            
-            # 将该分组下的账号移至默认分组
-            cursor.execute('''
-            UPDATE accounts 
-            SET group_name = '默认分组' 
-            WHERE group_name = ?
-            ''', (group_name,))
-            
-            # 删除分组
-            cursor.execute('DELETE FROM groups WHERE name = ?', (group_name,))
-            
-            # 提交事务
-            conn.commit()
-            return True
-        except Exception as e:
-            # 发生错误时回滚
-            conn.rollback()
-            raise e
-        finally:
-            conn.close()
+    # ==================== 分组管理方法已删除 ====================
     
     # ==================== 账号管理方法 ====================
     
-    def get_accounts(self, group_name=None):
-        """获取账号列表，可选按分组筛选"""
+    def get_accounts(self):
+        """获取账号列表"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        if group_name:
-            cursor.execute('''
-            SELECT * FROM accounts 
-            WHERE group_name = ?
-            ORDER BY id
-            ''', (group_name,))
-        else:
-            cursor.execute('SELECT * FROM accounts ORDER BY id')
+        cursor.execute('SELECT * FROM accounts ORDER BY id')
         accounts = cursor.fetchall()
         conn.close()
         return accounts
@@ -274,15 +207,13 @@ class DataManager:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                # 确保分组存在
-                cursor.execute('INSERT OR IGNORE INTO groups (name) VALUES (?)', (account_data.get('group_name', '默认分组'),))
                 # 按照表结构顺序插入数据
                 cursor.execute('''
                     INSERT INTO accounts (
                         username, password, ck, nickname, account_id,
                         login_status, homepage, login_time, proxy,
-                        running_status, note, group_name
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        running_status, note
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     account_data['username'],
                     account_data['password'],
@@ -294,8 +225,7 @@ class DataManager:
                     account_data['login_time'],
                     account_data['proxy'],
                     account_data['running_status'],
-                    account_data['note'],
-                    account_data['group_name']
+                    account_data['note']
                 ))
                 conn.commit()
                 return True
@@ -306,10 +236,6 @@ class DataManager:
         """更新账号信息"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        
-        # 确保分组存在
-        cursor.execute('INSERT OR IGNORE INTO groups (name) VALUES (?)', 
-                     (account_data.get('group', '默认分组'),))
         
         # 更新账号数据
         cursor.execute('''
@@ -324,8 +250,7 @@ class DataManager:
             login_time = ?,
             proxy = ?,
             running_status = ?,
-            note = ?,
-            group_name = ?
+            note = ?
         WHERE id = ? OR username = ?
         ''', (
             account_data['username'],
@@ -339,7 +264,6 @@ class DataManager:
             account_data.get('proxy', ''),
             account_data.get('running_status', ''),
             account_data.get('note', ''),
-            account_data.get('group', '默认分组'),
             username_or_id,
             username_or_id
         ))

@@ -173,11 +173,13 @@ def delete_account_handler(window):
 def add_proxy_handler(window):
     """添加代理处理函数"""
     selected_rows = set()
-    for item in window.account_table.selectedItems():
-        selected_rows.add(item.row())
-    
+    for row in range(window.account_table.rowCount()):
+        checkbox_item = window.account_table.item(row, 0)
+        if checkbox_item and checkbox_item.checkState() == Qt.CheckState.Checked:
+            selected_rows.add(row)
+
     if not selected_rows:
-        QMessageBox.warning(window, "警告", "请先选择要添加代理的账号")
+        QMessageBox.warning(window, "警告", "请先勾选要添加代理的账号")
         return
     
     # 创建自定义对话框
@@ -236,8 +238,7 @@ def add_proxy_handler(window):
                                 'login_time': account[8],
                                 'proxy': proxy,
                                 'running_status': account[10],
-                                'note': account[11],
-                                'group_name': account[12]
+                                'note': account[11]
                             }
                             if window.data_manager.update_account(account[0], account_data):
                                 success_count += 1
@@ -355,13 +356,7 @@ def on_run_start_clicked_handler(window):
     print(f"🔍 DEBUG: 当前选择框的值: '{window.run_mode_combo.currentText()}'")
     print(f"🔍 DEBUG: 选择框索引: {window.run_mode_combo.currentIndex()}")
     
-    # 首先检查是否已选择分组
-    if not window.is_group_selected():
-        print("❌ 错误：未选择账号分组！")
-        QMessageBox.critical(window, "错误", "请先点击选择账号分组，然后才能开始执行任务！\n\n操作步骤：\n1. 在左侧分组列表中点击选择一个分组\n2. 确认分组被高亮选中\n3. 再次点击开始按钮")
-        return
-    
-    print(f"✅ 已选择分组: {window.get_selected_group_name()}")
+    # 分组选择检查已删除
     
     # 获取选择框的当前值
     selected_mode = window.run_mode_combo.currentText()

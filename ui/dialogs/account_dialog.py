@@ -31,7 +31,7 @@ class AccountDialog(BaseDialog):
         self.data_manager = DataManager()
         self.account_data = account_data or {}
         title = "编辑账号" if account_data else "添加账号"
-        super().__init__(parent, title, 450, 500)
+        super().__init__(parent, title, 400, 300)
     
     def init_ui(self):
         """初始化UI"""
@@ -68,30 +68,6 @@ class AccountDialog(BaseDialog):
         self.username_edit = QLineEdit()
         self.password_edit = QLineEdit()
         self.password_edit.setEchoMode(QLineEdit.Password)
-        self.ck_edit = QLineEdit()
-        self.nickname_edit = QLineEdit()
-        self.account_id_edit = QLineEdit()
-        
-        # 状态信息
-        self.login_status_combo = QComboBox()
-        self.login_status_combo.addItems(["未登录", "已登录", "登录失败"])
-        
-        self.running_status_combo = QComboBox()
-        self.running_status_combo.addItems(["空闲", "运行中", "已完成", "错误"])
-        
-        # 其他信息
-        self.homepage_edit = QLineEdit()
-        self.login_time_edit = QLineEdit()
-        self.proxy_edit = QLineEdit()
-        
-        # 分组下拉框
-        self.group_combo = QComboBox()
-        self.group_combo.setEditable(True)  # 允许编辑以添加新分组
-        try:
-            groups = self.data_manager.get_groups()
-            self.group_combo.addItems(groups)
-        except Exception:
-            self.group_combo.addItems(["默认分组"])
         
         # 备注
         self.note_edit = QTextEdit()
@@ -101,15 +77,6 @@ class AccountDialog(BaseDialog):
         """添加表单行"""
         form_layout.addRow("用户名*:", self.username_edit)
         form_layout.addRow("密码*:", self.password_edit)
-        form_layout.addRow("Cookie:", self.ck_edit)
-        form_layout.addRow("昵称:", self.nickname_edit)
-        form_layout.addRow("账号ID:", self.account_id_edit)
-        form_layout.addRow("登录状态:", self.login_status_combo)
-        form_layout.addRow("主页地址:", self.homepage_edit)
-        form_layout.addRow("登录时间:", self.login_time_edit)
-        form_layout.addRow("代理IP:", self.proxy_edit)
-        form_layout.addRow("运行状态:", self.running_status_combo)
-        form_layout.addRow("分组:", self.group_combo)
         form_layout.addRow("备注:", self.note_edit)
     
     def _add_fingerprint_button(self, layout):
@@ -148,36 +115,12 @@ class AccountDialog(BaseDialog):
         Args:
             data: 账号数据字典
         """
+        # 保存原始数据，用于编辑时保留未显示的字段
+        self.original_data = data.copy()
+        
+        # 只加载显示的字段
         self.username_edit.setText(data.get('username', ''))
         self.password_edit.setText(data.get('password', ''))
-        self.ck_edit.setText(data.get('ck', ''))
-        self.nickname_edit.setText(data.get('nickname', ''))
-        self.account_id_edit.setText(data.get('account_id', ''))
-        
-        # 设置下拉框选项
-        login_status = data.get('login_status', '未登录')
-        index = self.login_status_combo.findText(login_status)
-        if index >= 0:
-            self.login_status_combo.setCurrentIndex(index)
-        
-        running_status = data.get('running_status', '空闲')
-        index = self.running_status_combo.findText(running_status)
-        if index >= 0:
-            self.running_status_combo.setCurrentIndex(index)
-        
-        self.homepage_edit.setText(data.get('homepage', ''))
-        self.login_time_edit.setText(data.get('login_time', ''))
-        self.proxy_edit.setText(data.get('proxy', ''))
-        
-        # 设置分组
-        group_name = data.get('group_name', '')
-        if group_name:
-            index = self.group_combo.findText(group_name)
-            if index >= 0:
-                self.group_combo.setCurrentIndex(index)
-            else:
-                self.group_combo.setCurrentText(group_name)
-        
         self.note_edit.setPlainText(data.get('note', ''))
     
     def show_fingerprint_data(self):
@@ -199,20 +142,33 @@ class AccountDialog(BaseDialog):
         Returns:
             dict: 账号数据字典，包含所有字段
         """
-        return {
+        # 基础数据（用户输入的字段）
+        data = {
             'username': self.username_edit.text().strip(),
             'password': self.password_edit.text().strip(),
-            'ck': self.ck_edit.text().strip(),
-            'nickname': self.nickname_edit.text().strip(),
-            'account_id': self.account_id_edit.text().strip(),
-            'login_status': self.login_status_combo.currentText(),
-            'homepage': self.homepage_edit.text().strip(),
-            'login_time': self.login_time_edit.text().strip(),
-            'proxy': self.proxy_edit.text().strip(),
-            'running_status': self.running_status_combo.currentText(),
-            'note': self.note_edit.toPlainText().strip(),
-            'group_name': self.group_combo.currentText().strip() or '默认分组'
+            'note': self.note_edit.toPlainText().strip()
         }
+        
+        # 如果是编辑模式，保留原始数据中的其他字段
+        if hasattr(self, 'original_data') and self.original_data:
+            # 保留未显示的字段
+            for key in ['ck', 'nickname', 'account_id', 'login_status', 
+                       'homepage', 'login_time', 'proxy', 'running_status']:
+                data[key] = self.original_data.get(key, '')
+        else:
+            # 添加模式，设置默认值
+            data.update({
+                'ck': '',
+                'nickname': '',
+                'account_id': '',
+                'login_status': '未登录',
+                'homepage': '',
+                'login_time': '',
+                'proxy': '',
+                'running_status': '空闲'
+            })
+        
+        return data
     
     def validate_data(self):
         """
@@ -242,72 +198,4 @@ class AccountDialog(BaseDialog):
         super().accept()
 
 
-class GroupDialog(BaseDialog):
-    """分组编辑对话框"""
-    
-    def __init__(self, parent=None, group_name=None, mode="add"):
-        """
-        初始化分组对话框
-        
-        Args:
-            parent: 父窗口
-            group_name: 分组名称
-            mode: 模式，"add"为添加，"edit"为编辑
-        """
-        self.group_name = group_name
-        self.mode = mode
-        title = "添加分组" if mode == "add" else "编辑分组"
-        super().__init__(parent, title, 300, 150)
-    
-    def init_ui(self):
-        """初始化UI"""
-        layout = QVBoxLayout(self)
-        layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
-        
-        # 分组名称输入
-        name_layout = QHBoxLayout()
-        name_layout.setSpacing(10)
-        
-        label = QLabel("分组名称:")
-        self.name_edit = QLineEdit(self.group_name or '')
-        
-        name_layout.addWidget(label)
-        name_layout.addWidget(self.name_edit)
-        layout.addLayout(name_layout)
-        
-        # 按钮布局
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(10)
-        
-        save_btn = QPushButton("保存")
-        save_btn.clicked.connect(self.accept)
-        save_btn.setDefault(True)
-        
-        cancel_btn = QPushButton("取消")
-        cancel_btn.clicked.connect(self.reject)
-        
-        button_layout.addStretch()
-        button_layout.addWidget(save_btn)
-        button_layout.addWidget(cancel_btn)
-        layout.addLayout(button_layout)
-    
-    def get_data(self):
-        """获取分组名称"""
-        return self.name_edit.text().strip()
-    
-    def validate_data(self):
-        """验证输入数据"""
-        name = self.name_edit.text().strip()
-        if not name:
-            return False, "分组名称不能为空"
-        return True, ""
-    
-    def accept(self):
-        """重写accept方法，添加数据验证"""
-        valid, error_msg = self.validate_data()
-        if not valid:
-            QMessageBox.warning(self, "输入错误", error_msg)
-            return
-        
-        super().accept()
+# GroupDialog类已删除

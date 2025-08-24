@@ -178,32 +178,31 @@ async def panduan_zhanghaoshifoudenglu():
             pass
         return False, None
 
-async def zhixingyanzhengpinglunchengxu(content, movie_id, rating, group_name, used_accounts=None):
+async def zhixingyanzhengpinglunchengxu(content, movie_id, rating, used_accounts=None):
     print(f"🎬 正在处理内容: {content}，电影ID: {movie_id}，评分: {rating}")
-    print(f"👥 使用分组: {group_name}")
     
     if used_accounts is None:
         used_accounts = set()
     
-    # 读取指定分组的账号信息
+    # 读取账号信息（不再按分组筛选）
     try:
         conn = sqlite3.connect(DATABASE_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT username, password FROM accounts WHERE group_name = ? ORDER BY id", (group_name,))
+        cursor.execute("SELECT username, password FROM accounts ORDER BY id")
         accounts = cursor.fetchall()
         conn.close()
         
         if not accounts:
-            print(f"❌ 分组 '{group_name}' 内没有任何账号，无法执行任务")
-            print(f"💡 请先在账号管理中为该分组添加账号，或者选择其他分组")
+            print(f"❌ 没有任何账号，无法执行任务")
+            print(f"💡 请先在账号管理中添加账号")
             return False, None
             
     except Exception as e:
-        print(f"❌ 读取分组账号失败: {e}")
+        print(f"❌ 读取账号失败: {e}")
         return False, None
     
     total_accounts = len(accounts)
-    print(f"🔍 分组 '{group_name}' 内账号数量: {total_accounts}")
+    print(f"🔍 账号数量: {total_accounts}")
     print(f"📋 已使用账号: {list(used_accounts)}")
     
     # 找到可用的账号（未使用过的）
@@ -271,13 +270,8 @@ def zhixfabuzichongxing():
     
     print("✅ 发布任务执行完成")
 
-async def suijidianyingpinglunpingxing(group_name=None):
-    # 如果没有传入分组名称，返回错误
-    if not group_name:
-        print("❌ 错误：未指定分组名称，无法执行任务")
-        return [], []
-    
-    print(f"👥 使用分组: {group_name}")
+async def suijidianyingpinglunpingxing():
+    print("开始执行随机电影评论评星任务")
     
     # 判断内容数量必须大于等于电影数量，否则弹窗提示并返回
     content_data = read_content_specific()
@@ -302,8 +296,8 @@ async def suijidianyingpinglunpingxing(group_name=None):
             print(f"🎯 处理第{i+1}个任务：内容='{content}'，电影ID={movie_id}，评分={rating}")
             
             try:
-                # 执行发布任务，传递分组名称和已使用账号列表
-                task_success, used_account = await zhixingyanzhengpinglunchengxu(content, movie_id, rating, group_name, used_accounts)
+                # 执行发布任务，不再传递分组名称
+                task_success, used_account = await zhixingyanzhengpinglunchengxu(content, movie_id, rating, used_accounts)
                 
                 if task_success:
                     print(f"✅ 第{i+1}个任务完成，使用账号: {used_account}")
