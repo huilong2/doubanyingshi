@@ -397,7 +397,28 @@ def on_run_start_clicked_handler(window):
     
     elif selected_mode == "随机评论":
         print("🔍 DEBUG: 选择了'随机评论'")
-        QMessageBox.information(window, "提示", "随机评论功能待实现")
+        # 导入随机评论模块
+        try:
+            from suijipingpingxingliucheng import 随机评论
+            # 在新线程中执行随机评论功能，避免阻塞UI
+            import threading
+            def run_random_comment():
+                try:
+                    随机评论()
+                    # 在主线程中显示成功消息
+                    window.browser_signals.info.emit("随机评论任务执行完成")
+                except Exception as e:
+                    error_msg = f"随机评论任务执行失败: {str(e)}"
+                    print(error_msg)
+                    window.browser_signals.error.emit(error_msg)
+            
+            thread = threading.Thread(target=run_random_comment, daemon=True)
+            thread.start()
+            QMessageBox.information(window, "提示", "已启动随机评论任务，请查看日志了解详情")
+        except Exception as e:
+            error_msg = f"导入随机评论模块失败: {str(e)}"
+            print(error_msg)
+            QMessageBox.critical(window, "错误", error_msg)
     
     else:
         print(f"🔍 DEBUG: 选择了其他功能: '{selected_mode}'")

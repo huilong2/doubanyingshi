@@ -15,7 +15,7 @@
     "operation_interval_max": "5",
     "account_interval_min": "3",
     "account_interval_max": "5",
-    "error_interval_min": "3",
-    "error_interval_max": "5"
+    "error_interval_min": "2",
+    "error_interval_max": "3"
   }
 }

@@ -11,13 +11,14 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTableWidget, QTableWidgetItem, QMessageBox,
     QDialog, QLabel, QLineEdit, QComboBox, QTabWidget, QTextEdit, QProgressBar, QGroupBox, QFileDialog,
-    QStyledItemDelegate, QSizePolicy, QSpacerItem, QCheckBox
+    QStyledItemDelegate, QSizePolicy, QSpacerItem, QCheckBox, QHeaderView
 )
 from PySide6.QtCore import Qt, Signal, QObject, QTimer
 from PySide6.QtGui import QIcon
 # 导入枚举值
 from PySide6.QtWidgets import QAbstractItemView, QSizePolicy
 from data_manager import DataManager
+from new_data_manager import NewDataManager
 from pathlib import Path
 from mokuai_chagyong import chagyong_load_config, chagyong_save_config
 from liulanqi_gongcaozuo import LiulanqiGongcaozuo, LiulanqiPeizhi
@@ -116,6 +117,7 @@ class AccountManagerWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.data_manager = DataManager()
+        self.new_data_manager = NewDataManager(quan_shujuwenjianjia)
         # 分组表相关组件已删除
         self.account_table = QTableWidget()  # 只在这里创建一次
         self.config = {}
@@ -174,6 +176,7 @@ class AccountManagerWindow(QMainWindow):
             "内容管理": self.init_content_tab(),
             "功能设置": self.init_function_tab(),
             "操作设置": self.init_operation_tab(),
+            "数据库管理": self.init_database_tab(),
             "程序设置": self.init_settings_tab()
         }
         
@@ -689,6 +692,70 @@ class AccountManagerWindow(QMainWindow):
         
         widget.setLayout(layout)
         return widget
+
+    def init_database_tab(self):
+        """初始化数据库管理标签页"""
+        widget = QWidget()
+        main_layout = QHBoxLayout(widget)
+        main_layout.setSpacing(15)
+
+        # 左侧：数据库表列表
+        left_widget = QWidget()
+        left_layout = QVBoxLayout(left_widget)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_group = QGroupBox("数据库表")
+        left_group_layout = QVBoxLayout(left_group)
+
+        self.database_table = QTableWidget()
+        self.database_table.setColumnCount(2)
+        self.database_table.setHorizontalHeaderLabels(["表名", "数据量"])
+        self.database_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.database_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.database_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.database_table.verticalHeader().setVisible(False)
+        
+        # 设置列宽策略，让表名列自动拉伸
+        header = self.database_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        
+        # 设置表格样式优化
+        self.database_table.setAlternatingRowColors(True)  # 交替行颜色
+        self.database_table.setShowGrid(True)  # 显示网格线
+        self.database_table.setGridStyle(Qt.PenStyle.SolidLine)  # 实线网格
+        
+        self.database_table.cellClicked.connect(self.on_database_table_clicked)
+        left_group_layout.addWidget(self.database_table)
+        left_layout.addWidget(left_group)
+        main_layout.addWidget(left_widget, 1) # 左侧占1份
+
+        # 右侧：数据显示
+        right_widget = QWidget()
+        right_layout = QVBoxLayout(right_widget)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_group = QGroupBox("数据详情")
+        right_group_layout = QVBoxLayout(right_group)
+
+        # 操作按钮
+        action_layout = QHBoxLayout()
+        self.db_refresh_button = QPushButton("刷新数据")
+        self.db_refresh_button.clicked.connect(self.refresh_database_info)
+        # self.db_delete_button = QPushButton("删除选中") # 待实现
+        action_layout.addWidget(self.db_refresh_button)
+        # action_layout.addWidget(self.db_delete_button)
+        action_layout.addStretch()
+        right_group_layout.addLayout(action_layout)
+
+        self.data_detail_table = QTableWidget()
+        self.data_detail_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.data_detail_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.data_detail_table.verticalHeader().setVisible(False)
+        right_group_layout.addWidget(self.data_detail_table)
+        right_layout.addWidget(right_group)
+
+        main_layout.addWidget(right_widget, 3) # 右侧占3份
+
+        return widget
     
     def init_settings_tab(self):
         """初始化设置标签页"""
@@ -725,12 +792,17 @@ class AccountManagerWindow(QMainWindow):
         browser_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
         
         layout.addWidget(browser_group)
+        
+
         layout.addItem(QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
         
         # 显示已保存的配置
         if self.config:
             self.browser_path_edit.setText(self.config.get('browser_path', ''))
             self.cache_path_edit.setText(self.config.get('browser_cache_path', ''))
+        
+        # 初始化数据库信息
+        self.refresh_database_info()
         
         widget.setLayout(layout)
         return widget
@@ -812,6 +884,9 @@ class AccountManagerWindow(QMainWindow):
         
         # 加载电影和内容数据
         self.load_movies_and_contents()
+
+        # 加载数据库信息
+        self.refresh_database_info()
     
     # 分组选择相关方法已删除
     
@@ -1376,6 +1451,68 @@ class AccountManagerWindow(QMainWindow):
     def remove_proxy(self):
         """删除代理"""
         remove_proxy_handler(self)
+    
+    def refresh_database_info(self):
+        """刷新数据库信息"""
+        try:
+            # 获取各表数据量
+            counts = self.new_data_manager.get_table_counts()
+            
+            # 更新表格数据
+            self.database_table.setRowCount(len(counts))
+            table_names = {'dianying': '电影', 'dianshi': '电视', 'yinyue': '音乐', 'dushu': '读书'}
+            
+            for i, (table_key, count) in enumerate(counts.items()):
+                # 表名
+                table_item = QTableWidgetItem(table_names.get(table_key, table_key))
+                table_item.setFlags(table_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self.database_table.setItem(i, 0, table_item)
+                
+                # 数据量
+                count_item = QTableWidgetItem(str(count))
+                count_item.setFlags(count_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self.database_table.setItem(i, 1, count_item)
+            
+            self.database_table.resizeColumnsToContents()
+            # 刷新时清空右侧详情表
+            self.data_detail_table.setRowCount(0)
+            self.data_detail_table.setColumnCount(0)
+        except Exception as e:
+            logger.error(f"刷新数据库信息失败: {str(e)}")
+            QMessageBox.warning(self, "错误", f"刷新数据库信息失败: {e}")
+
+    def on_database_table_clicked(self, row, column):
+        """处理数据库表格点击事件，在右侧显示数据"""
+        try:
+            table_item = self.database_table.item(row, 0)
+            if not table_item:
+                return
+
+            table_names_map = {'电影': 'dianying', '电视': 'dianshi', '音乐': 'yinyue', '读书': 'dushu'}
+            table_name_cn = table_item.text()
+            table_name_en = table_names_map.get(table_name_cn)
+
+            if not table_name_en:
+                return
+
+            data = self.new_data_manager.get_table_data(table_name_en)
+            table = self.data_detail_table
+
+            table.setRowCount(len(data))
+            headers = ['ID', f'{table_name_cn}ID', '名称', '年代']
+            table.setColumnCount(len(headers))
+            table.setHorizontalHeaderLabels(headers)
+
+            for i, row_data in enumerate(data):
+                for j, cell_data in enumerate(row_data):
+                    item = QTableWidgetItem(str(cell_data))
+                    item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                    table.setItem(i, j, item)
+            
+            table.resizeColumnsToContents()
+        except Exception as e:
+            logger.error(f"显示数据库表数据失败: {str(e)}")
+            QMessageBox.critical(self, "错误", f"显示数据失败: {str(e)}")
 
 if __name__ == "__main__":
     # 系统特定的配置
