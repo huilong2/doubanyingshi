@@ -1,5 +1,5 @@
 {
-  "browser_path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+  "browser_path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe ",
   "browser_cache_path": "E:/liulanqi",
   "function_settings": {
     "signature": false,
@@ -16,6 +16,10 @@
     "account_interval_min": "3",
     "account_interval_max": "5",
     "error_interval_min": "2",
-    "error_interval_max": "3"
+    "error_interval_max": "3",
+    "run_mode": "随机评论",
+    "run_status": "看过",
+    "run_cookie_time": "86400",
+    "enable_proxy": false
   }
 }

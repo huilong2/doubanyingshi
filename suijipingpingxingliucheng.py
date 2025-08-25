@@ -16,19 +16,84 @@ def load_settings():
         print("错误: 'data/peizhi.json' 文件格式不正确。")
         return {}
 
+# 从配置文件获取rating_type值
+def get_rating_type_from_config():
+    config = load_settings()
+    return config.get('rating_type', '电影')  # 默认为'电影'
+
 # 加载配置并赋值给全局变量
 config = load_settings()
 rating_min = int(config.get('rating_min', 1))
 rating_max = int(config.get('rating_max', 3))
 operation_interval_min = int(config.get('operation_interval_min', 3))
 operation_interval_max = int(config.get('operation_interval_max', 5))
+
+# 初始化rating_type下拉框
+# 注意：此处仅为示例，实际应用中应根据GUI框架进行初始化
+# 例如，在PyQt5中可以使用：self.rating_type = QComboBox()
+rating_type = None
+
+
+def 随机获取一个数据(table_name): 
+    # 初始化DataManager
+    data_manager = DataManager('data')
+    table_data = data_manager.get_table_data(table_name)   
+    # 如果没有数据，返回None
+    if not table_data:
+        return None    
+    # 随机选择一条完整数据并返回
+    random_record = random.choice(table_data)    
+    return random_record
+
+
 def 随机打星_电影电视音乐读书():
-     
+    # 初始化DataManager
+    data_manager = DataManager('data')
+    
+    # 定义rating_type到表名的映射
+    table_mapping = {
+        '电影': 'dianying',
+        '电视': 'dianshi',
+        '读书': 'dushu',
+        '音乐': 'yinyue'
+    }
+    
+    # 从配置文件获取rating_type值
+    config_rating_type = get_rating_type_from_config()
+    
+    # 根据配置的rating_type选择不同的表
+    if config_rating_type in table_mapping:
+        table_name = table_mapping[config_rating_type]
+    elif config_rating_type == '随机':  # 随机选择
+        random_choice = random.randint(0, 3)
+        if random_choice == 0:
+            table_name = 'dianying'
+        elif random_choice == 1:
+            table_name = 'dianshi'
+        elif random_choice == 2:
+            table_name = 'dushu'
+        else:  # random_choice == 3
+            table_name = 'yinyue'
+    else:
+        # 如果配置值无效，默认使用'电影'
+        table_name = 'dianying'
+    
+    # 从数据库中随机获取一个完整记录
+    random_record = 随机获取一个数据(table_name)
+    if random_record:
+        print (random_record[1], random_record[2], random_record[3])
+        # 返回随机记录和对应的序号
+        return random_record, config_rating_type
+    else:
+        print(f"表 {table_name} 中没有数据")
+        return None, config_rating_type
+    
     print("随机打星_电影电视音乐读书")
+ 
     
 def 随机评论():
     data_manager = DataManager()    
-    accounts = data_manager.get_accounts()    
+    accounts = data_manager.get_accounts()       
     # 遍历账号列表
     for account in accounts:
         # 解析账号数据
@@ -50,34 +115,23 @@ def 随机评论():
     
     print("随机评论流程执行完成")
 
-def 执行随机评论操作(username, account):
-    """执行具体的随机评论操作
-    
-    Args:
-        username (str): 账号用户名
-        account (tuple): 账号完整数据
-    """
-    # 这里实现具体的随机评论逻辑
-    # 例如：
-    # 1. 登录账号
-    # 2. 获取电影列表
-    # 3. 随机选择电影
-    # 4. 生成随机评论内容
-    # 5. 发布评论和评星
+def 执行随机评论操作(username, account, ):
     print(f"  为账号 {username} 执行随机评论操作")
-    random_rating = random.randint(rating_min, rating_max)
-    print(random_rating)
-    for i in range(random_rating):
+    suijipingxingjige = random.randint(rating_min, rating_max)
+    print(f"随机评星几个{suijipingxingjige}")
+    for i in range(suijipingxingjige):
         caozuojiange = random.randint(operation_interval_min, operation_interval_max)
         print(f"第 {i + 1} 次循环 延迟：{caozuojiange}")
         time.sleep(caozuojiange)
-        随机打星_电影电视音乐读书()
+        result, rating_type = 随机打星_电影电视音乐读书()
+        if result is None:
+            print(f"警告: 未能获取到{rating_type}数据，跳过本次评星")
+            continue
     
     # TODO: 实现具体的评论逻辑
 
 
 # 随机评论（）    # 这行代码已注释，避免语法错误
- 
 
 
 

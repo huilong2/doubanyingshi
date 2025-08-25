@@ -18,7 +18,7 @@ from PySide6.QtGui import QIcon
 # 导入枚举值
 from PySide6.QtWidgets import QAbstractItemView, QSizePolicy
 from data_manager import DataManager
-from new_data_manager import NewDataManager
+
 from pathlib import Path
 from mokuai_chagyong import chagyong_load_config, chagyong_save_config
 from liulanqi_gongcaozuo import LiulanqiGongcaozuo, LiulanqiPeizhi
@@ -42,6 +42,7 @@ from handlers.button_handlers import (
 )
 # 导入统一的UI组件
 from ui.dialogs import BaseDialog, AccountDialog
+from ui.dialogs.add_edit_dialog import AddEditDataDialog
 
 # 配置日志
 def setup_logging():
@@ -117,7 +118,7 @@ class AccountManagerWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.data_manager = DataManager()
-        self.new_data_manager = NewDataManager(quan_shujuwenjianjia)
+        self.media_data_manager = DataManager(quan_shujuwenjianjia)
         # 分组表相关组件已删除
         self.account_table = QTableWidget()  # 只在这里创建一次
         self.config = {}
@@ -531,6 +532,12 @@ class AccountManagerWindow(QMainWindow):
         self.group_checkbox = QCheckBox("小组")
         self.phrase_checkbox = QCheckBox("短语")
         
+        # 为复选框添加失去焦点事件处理
+        self.signature_checkbox.stateChanged.connect(self.save_settings)
+        self.status_checkbox.stateChanged.connect(self.save_settings)
+        self.group_checkbox.stateChanged.connect(self.save_settings)
+        self.phrase_checkbox.stateChanged.connect(self.save_settings)
+        
         # 添加复选框
         for checkbox in [self.signature_checkbox, self.status_checkbox, 
                         self.group_checkbox, self.phrase_checkbox]:
@@ -565,6 +572,10 @@ class AccountManagerWindow(QMainWindow):
                 edit.setFixedWidth(60)
                 edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
             
+            # 为文本框添加失去焦点事件处理
+            min_edit.editingFinished.connect(self.save_settings)
+            max_edit.editingFinished.connect(self.save_settings)
+            
             setattr(self, f"{name}_min", min_edit)
             setattr(self, f"{name}_max", max_edit)
             
@@ -595,6 +606,11 @@ class AccountManagerWindow(QMainWindow):
         for edit in [self.rating_min, self.rating_max]:
             edit.setFixedWidth(60)
             edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 为文本框添加失去焦点事件处理
+        self.rating_min.editingFinished.connect(self.save_settings)
+        self.rating_max.editingFinished.connect(self.save_settings)
+        
         rating_range_layout.addWidget(self.rating_min)
         rating_range_layout.addWidget(QLabel("-"))
         rating_range_layout.addWidget(self.rating_max)
@@ -609,6 +625,10 @@ class AccountManagerWindow(QMainWindow):
         
         self.star_rating = QLineEdit("3|4|5")
         self.star_rating.setFixedWidth(120)
+        
+        # 为文本框添加失去焦点事件处理
+        self.star_rating.editingFinished.connect(self.save_settings)
+        
         star_rating_layout.addWidget(self.star_rating)
         
         # 评星类型下拉框
@@ -616,6 +636,10 @@ class AccountManagerWindow(QMainWindow):
         self.rating_type.addItems(["电影", "电视", "读书", "音乐", "随机"])
         
         self.rating_type.setFixedWidth(100)
+        
+        # 为下拉框添加失去焦点事件处理
+        self.rating_type.currentTextChanged.connect(self.save_settings)
+        
         star_rating_layout.addWidget(self.rating_type)
         star_rating_layout.addStretch()
         rating_layout.addLayout(star_rating_layout)
@@ -629,6 +653,10 @@ class AccountManagerWindow(QMainWindow):
         self.content_text = QTextEdit()
         self.content_text.setPlaceholderText("请输入内容（支持换行）")
         self.content_text.setMinimumHeight(200)  # 设置最小高度
+        
+        # 为文本框添加失去焦点事件处理
+        self.content_text.textChanged.connect(self.save_settings)
+        
         text_layout.addWidget(self.content_text)
         
         right_layout.addWidget(text_group)
@@ -646,22 +674,38 @@ class AccountManagerWindow(QMainWindow):
 
         self.run_mode_combo = QComboBox()
         self.run_mode_combo.addItems(["指定电影评论评星", "随机评论", "其他功能"])
+        
+        # 为下拉框添加失去焦点事件处理
+        self.run_mode_combo.currentTextChanged.connect(self.save_settings)
+        
         run_layout.addWidget(self.run_mode_combo)
 
         self.run_status_combo = QComboBox()
         self.run_status_combo.addItems(["看过", "在看", "想看"])
         self.run_status_combo.setFixedWidth(80) 
+        
+        # 为下拉框添加失去焦点事件处理
+        self.run_status_combo.currentTextChanged.connect(self.save_settings)
+        
         run_layout.addWidget(self.run_status_combo)
 
         cookie_label = QLabel("cookie更新时间:")
         run_layout.addWidget(cookie_label)
         self.run_cookie_time = QLineEdit("86400")
         self.run_cookie_time.setFixedWidth(80)
+        
+        # 为文本框添加失去焦点事件处理
+        self.run_cookie_time.editingFinished.connect(self.save_settings)
+        
         run_layout.addWidget(self.run_cookie_time)
 
         # 添加开启代理复选框
         self.enable_proxy_checkbox = QCheckBox("开启代理")
         self.enable_proxy_checkbox.setToolTip("勾选后将使用账号配置的代理设置")
+        
+        # 为复选框添加失去焦点事件处理
+        self.enable_proxy_checkbox.stateChanged.connect(self.save_settings)
+        
         run_layout.addWidget(self.enable_proxy_checkbox)
 
         right_layout.addWidget(run_group)
@@ -740,15 +784,35 @@ class AccountManagerWindow(QMainWindow):
         action_layout = QHBoxLayout()
         self.db_refresh_button = QPushButton("刷新数据")
         self.db_refresh_button.clicked.connect(self.refresh_database_info)
-        # self.db_delete_button = QPushButton("删除选中") # 待实现
+        
+        # 添加表选择下拉框
+        self.table_selector = QComboBox()
+        self.table_selector.addItems(["电影", "电视", "音乐", "读书"])
+        self.table_selector.setCurrentText("电影")
+        
+        # 添加增删改查按钮
+        self.db_add_button = QPushButton("添加")
+        self.db_edit_button = QPushButton("编辑")
+        self.db_delete_button = QPushButton("删除")
+        
+        # 连接按钮事件
+        self.db_add_button.clicked.connect(self.on_db_add_clicked)
+        self.db_edit_button.clicked.connect(self.on_db_edit_clicked)
+        self.db_delete_button.clicked.connect(self.on_db_delete_clicked)
+        
         action_layout.addWidget(self.db_refresh_button)
-        # action_layout.addWidget(self.db_delete_button)
+        action_layout.addWidget(QLabel("选择表:"))
+        action_layout.addWidget(self.table_selector)
+        action_layout.addWidget(self.db_add_button)
+        action_layout.addWidget(self.db_edit_button)
+        action_layout.addWidget(self.db_delete_button)
         action_layout.addStretch()
         right_group_layout.addLayout(action_layout)
 
         self.data_detail_table = QTableWidget()
         self.data_detail_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.data_detail_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.data_detail_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.data_detail_table.verticalHeader().setVisible(False)
         right_group_layout.addWidget(self.data_detail_table)
         right_layout.addWidget(right_group)
@@ -774,6 +838,10 @@ class AccountManagerWindow(QMainWindow):
         browser_path_layout.addWidget(label)
         self.browser_path_edit = QLineEdit()
         self.browser_path_edit.setPlaceholderText("请选择浏览器可执行文件路径")
+        
+        # 为文本框添加失去焦点事件处理
+        self.browser_path_edit.editingFinished.connect(self.save_settings)
+        
         browser_path_layout.addWidget(self.browser_path_edit)
         browser_path_layout.addWidget(self.create_button("自动检测", self.detect_browser_path))
         browser_path_layout.addWidget(self.create_button("浏览", self.browse_browser))
@@ -785,6 +853,10 @@ class AccountManagerWindow(QMainWindow):
         cache_path_layout.addWidget(label)
         self.cache_path_edit = QLineEdit()
         self.cache_path_edit.setPlaceholderText("请选择浏览器缓存目录")
+        
+        # 为文本框添加失去焦点事件处理
+        self.cache_path_edit.editingFinished.connect(self.save_settings)
+        
         cache_path_layout.addWidget(self.cache_path_edit)
         cache_path_layout.addWidget(self.create_button("浏览", self.browse_cache))
         browser_layout.addLayout(cache_path_layout)
@@ -868,6 +940,16 @@ class AccountManagerWindow(QMainWindow):
                     self.error_interval_min.setText(str(settings.get('error_interval_min', '3')))
                 if hasattr(self, 'error_interval_max'):
                     self.error_interval_max.setText(str(settings.get('error_interval_max', '5')))
+                
+                # 加载运行设置
+                if hasattr(self, 'run_mode_combo'):
+                    self.run_mode_combo.setCurrentText(settings.get('run_mode', '指定电影评论评星'))
+                if hasattr(self, 'run_status_combo'):
+                    self.run_status_combo.setCurrentText(settings.get('run_status', '看过'))
+                if hasattr(self, 'run_cookie_time'):
+                    self.run_cookie_time.setText(str(settings.get('run_cookie_time', '86400')))
+                if hasattr(self, 'enable_proxy_checkbox'):
+                    self.enable_proxy_checkbox.setChecked(settings.get('enable_proxy', False))
                 
             logger.info("配置已成功应用到 UI 组件")
         except Exception as e:
@@ -1031,13 +1113,17 @@ class AccountManagerWindow(QMainWindow):
                     "account_interval_min": self.account_interval_min.text() if hasattr(self, 'account_interval_min') else '3',
                     "account_interval_max": self.account_interval_max.text() if hasattr(self, 'account_interval_max') else '5',
                     "error_interval_min": self.error_interval_min.text() if hasattr(self, 'error_interval_min') else '3',
-                    "error_interval_max": self.error_interval_max.text() if hasattr(self, 'error_interval_max') else '5'
+                    "error_interval_max": self.error_interval_max.text() if hasattr(self, 'error_interval_max') else '5',
+                    # 添加运行设置
+                    "run_mode": self.run_mode_combo.currentText() if hasattr(self, 'run_mode_combo') else '指定电影评论评星',
+                    "run_status": self.run_status_combo.currentText() if hasattr(self, 'run_status_combo') else '看过',
+                    "run_cookie_time": self.run_cookie_time.text() if hasattr(self, 'run_cookie_time') else '86400',
+                    "enable_proxy": self.enable_proxy_checkbox.isChecked() if hasattr(self, 'enable_proxy_checkbox') else False
                 }
             }
             
             if chagyong_save_config(quan_shujuwenjianjia, config):
                 self.config = config  # 更新当前配置
-                self.browser_signals.info.emit("设置已保存")
                 logger.info(f"配置已保存: {config}")
             else:
                 self.browser_signals.error.emit("保存设置失败")
@@ -1456,7 +1542,7 @@ class AccountManagerWindow(QMainWindow):
         """刷新数据库信息"""
         try:
             # 获取各表数据量
-            counts = self.new_data_manager.get_table_counts()
+            counts = self.media_data_manager.get_table_counts()
             
             # 更新表格数据
             self.database_table.setRowCount(len(counts))
@@ -1495,7 +1581,135 @@ class AccountManagerWindow(QMainWindow):
             if not table_name_en:
                 return
 
-            data = self.new_data_manager.get_table_data(table_name_en)
+            data = self.media_data_manager.get_table_data(table_name_en)
+            table = self.data_detail_table
+
+            table.setRowCount(len(data))
+            headers = ['ID', f'{table_name_cn}ID', '名称', '年代']
+            table.setColumnCount(len(headers))
+            table.setHorizontalHeaderLabels(headers)
+
+            for i, row_data in enumerate(data):
+                for j, cell_data in enumerate(row_data):
+                    item = QTableWidgetItem(str(cell_data))
+                    item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                    table.setItem(i, j, item)
+            
+            table.resizeColumnsToContents()
+        except Exception as e:
+            logger.error(f"显示数据库表数据失败: {str(e)}")
+            QMessageBox.critical(self, "错误", f"显示数据失败: {str(e)}")
+    
+    def on_db_add_clicked(self):
+        """处理添加数据按钮点击事件"""
+        # 获取当前选择的表
+        table_name_cn = self.table_selector.currentText()
+        table_names_map = {'电影': 'dianying', '电视': 'dianshi', '音乐': 'yinyue', '读书': 'dushu'}
+        table_name_en = table_names_map.get(table_name_cn)
+        
+        if not table_name_en:
+            QMessageBox.warning(self, "警告", "请选择有效的表")
+            return
+        
+        # 创建添加数据对话框
+        dialog = AddEditDataDialog(self, table_name_cn, table_name_en, mode="add")
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            # 获取输入的数据
+            data = dialog.get_data()
+            if data:
+                # 添加到数据库
+                success = self.media_data_manager.add_data(table_name_en, data)
+                if success:
+                    QMessageBox.information(self, "成功", "数据添加成功")
+                    # 刷新显示
+                    self.refresh_database_info()
+                    # 重新加载当前表数据
+                    self.load_table_data(table_name_en, table_name_cn)
+                else:
+                    QMessageBox.critical(self, "错误", "数据添加失败")
+    
+    def on_db_edit_clicked(self):
+        """处理编辑数据按钮点击事件"""
+        # 获取当前选择的表
+        table_name_cn = self.table_selector.currentText()
+        table_names_map = {'电影': 'dianying', '电视': 'dianshi', '音乐': 'yinyue', '读书': 'dushu'}
+        table_name_en = table_names_map.get(table_name_cn)
+        
+        if not table_name_en:
+            QMessageBox.warning(self, "警告", "请选择有效的表")
+            return
+        
+        # 检查是否选中了数据行
+        selected_rows = self.data_detail_table.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(self, "警告", "请选择要编辑的数据行")
+            return
+        
+        # 获取选中行的数据
+        row = selected_rows[0].row()
+        row_data = []
+        for column in range(self.data_detail_table.columnCount()):
+            item = self.data_detail_table.item(row, column)
+            row_data.append(item.text() if item else "")
+        
+        # 创建编辑数据对话框
+        dialog = AddEditDataDialog(self, table_name_cn, table_name_en, mode="edit", data=row_data)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            # 获取输入的数据
+            data = dialog.get_data()
+            if data:
+                # 更新数据库（这里需要实现更新方法）
+                success = self.media_data_manager.update_data(table_name_en, data, row_data[0])  # 假设ID是第一个字段
+                if success:
+                    QMessageBox.information(self, "成功", "数据更新成功")
+                    # 刷新显示
+                    self.refresh_database_info()
+                    # 重新加载当前表数据
+                    self.load_table_data(table_name_en, table_name_cn)
+                else:
+                    QMessageBox.critical(self, "错误", "数据更新失败")
+    
+    def on_db_delete_clicked(self):
+        """处理删除数据按钮点击事件"""
+        # 获取当前选择的表
+        table_name_cn = self.table_selector.currentText()
+        table_names_map = {'电影': 'dianying', '电视': 'dianshi', '音乐': 'yinyue', '读书': 'dushu'}
+        table_name_en = table_names_map.get(table_name_cn)
+        
+        if not table_name_en:
+            QMessageBox.warning(self, "警告", "请选择有效的表")
+            return
+        
+        # 检查是否选中了数据行
+        selected_rows = self.data_detail_table.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(self, "警告", "请选择要删除的数据行")
+            return
+        
+        # 确认删除
+        reply = QMessageBox.question(self, "确认", "确定要删除选中的数据吗？", 
+                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            # 获取选中行的ID
+            row = selected_rows[0].row()
+            id_item = self.data_detail_table.item(row, 0)  # 假设ID在第一列
+            if id_item:
+                data_id = id_item.text()
+                # 从数据库删除
+                success = self.media_data_manager.delete_data(table_name_en, data_id)
+                if success:
+                    QMessageBox.information(self, "成功", "数据删除成功")
+                    # 刷新显示
+                    self.refresh_database_info()
+                    # 重新加载当前表数据
+                    self.load_table_data(table_name_en, table_name_cn)
+                else:
+                    QMessageBox.critical(self, "错误", "数据删除失败")
+    
+    def load_table_data(self, table_name_en, table_name_cn):
+        """加载指定表的数据到详情表"""
+        try:
+            data = self.media_data_manager.get_table_data(table_name_en)
             table = self.data_detail_table
 
             table.setRowCount(len(data))
@@ -1551,6 +1765,10 @@ if __name__ == "__main__":
         
         # 设置 Windows 特定的样式
         os.environ["QT_STYLE_OVERRIDE"] = "Fusion"
+    
+    # 启动API服务
+    from start_api import start_api
+    api_thread = start_api()
     
     app = QApplication(sys.argv)
     
