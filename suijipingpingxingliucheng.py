@@ -27,11 +27,6 @@ def load_settings():
         print("错误: 'data/peizhi.json' 文件格式不正确。")
         return {}
 
-# 从配置文件获取rating_type值
-def get_rating_type_from_config():
-    config = load_settings()
-    return config.get('rating_type', '电影')  # 默认为'电影'
-
 # 加载配置并赋值给全局变量
 config = load_settings()
 rating_min = int(config.get('rating_min', 1))
@@ -57,7 +52,7 @@ def 随机获取一个数据(table_name):
     return random_record
 
 
-def 随机打星_电影电视音乐读书():
+def 随机打星_电影电视音乐读书(window):
     # 初始化DataManager
     data_manager = DataManager('data')
     
@@ -69,13 +64,10 @@ def 随机打星_电影电视音乐读书():
         '音乐': 'yinyue'
     }
     
-    # 从配置文件获取rating_type值
-    config_rating_type = get_rating_type_from_config()
-    
-    # 根据配置的rating_type选择不同的表
-    if config_rating_type in table_mapping:
-        table_name = table_mapping[config_rating_type]
-    elif config_rating_type == '随机':  # 随机选择
+    # 从UI组件获取rating_type值
+    random_choice = window.rating_type.currentIndex()
+    # 根据选择的索引确定表名
+    if random_choice == 4:  # 随机选择
         random_choice = random.randint(0, 3)
         if random_choice == 0:
             table_name = 'dianying'
@@ -83,26 +75,34 @@ def 随机打星_电影电视音乐读书():
             table_name = 'dianshi'
         elif random_choice == 2:
             table_name = 'dushu'
-        else:  # random_choice == 3
+        else:
             table_name = 'yinyue'
     else:
-        # 如果配置值无效，默认使用'电影'
-        table_name = 'dianying'
+        # 根据索引选择对应的表
+        rating_types = ['电影', '电视', '读书', '音乐']
+        if 0 <= random_choice < len(rating_types):
+            table_name = table_mapping[rating_types[random_choice]]
+        else:
+            # 如果索引无效，默认使用'电影'
+            table_name = 'dianying'
     
     # 从数据库中随机获取一个完整记录
     random_record = 随机获取一个数据(table_name)
     if random_record:
         print (random_record[1], random_record[2], random_record[3])
-        # 返回随机记录和对应的序号
-        return random_record, config_rating_type
+        # 获取对应的类型名称
+        rating_types = ['电影', '电视', '读书', '音乐']
+        type_name = rating_types[random_choice] if 0 <= random_choice < len(rating_types) else '电影'
+        # 返回随机记录、类型名称、表名和random_choice
+        return random_record, type_name, table_name, random_choice
     else:
         print(f"表 {table_name} 中没有数据")
-        return None, config_rating_type
+        return None, '电影', table_name, random_choice
     
     print("随机打星_电影电视音乐读书")
  
     
-def 随机评论():
+def 随机评论(window=None):
     data_manager = DataManager()    
     accounts = data_manager.get_accounts()       
     # 遍历账号列表
@@ -119,14 +119,14 @@ def 随机评论():
             print(f"正在处理账号: {username}")
             # 在这里执行随机评论操作
             # 例如：执行评论逻辑、评星等
-            执行随机评论操作(username, account)
+            执行随机评论操作(username, account, window)
         else:  # 账号未勾选
             print(f"跳过未勾选账号: {username}")
             continue
     
     print("随机评论流程执行完成")
 
-def 执行随机评论操作(username, account, ):
+def 执行随机评论操作(username, account, window):
     print(f"  为账号 {username} 执行随机评论操作")
     suijipingxingjige = random.randint(rating_min, rating_max)
     print(f"随机评星几个{suijipingxingjige}")
@@ -134,7 +134,7 @@ def 执行随机评论操作(username, account, ):
         caozuojiange = random.randint(operation_interval_min, operation_interval_max)
         print(f"第 {i + 1} 次循环 延迟：{caozuojiange}")
         time.sleep(caozuojiange)
-        result, rating_type = 随机打星_电影电视音乐读书()
+        result, rating_type, neixing, random_choice = 随机打星_电影电视音乐读书(window)
         if result is None:
             print(f"警告: 未能获取到{rating_type}数据，跳过本次评星")
             continue    

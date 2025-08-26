@@ -485,7 +485,7 @@ def on_run_start_clicked_handler(window):
             import threading
             def run_random_comment():
                 try:
-                    随机评论()
+                    随机评论(window)
                     # 在主线程中显示成功消息
                     window.browser_signals.info.emit("随机评论任务执行完成")
                 except Exception as e:

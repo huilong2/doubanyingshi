@@ -617,6 +617,24 @@ class AccountManagerWindow(QMainWindow):
         rating_range_layout.addStretch()
         rating_layout.addLayout(rating_range_layout)
         
+        # 随机百分比评论
+        random_percentage_layout = QHBoxLayout()
+        random_percentage_layout.setSpacing(10)
+        percentage_label = QLabel("随机百分比评论：")
+        random_percentage_layout.addWidget(percentage_label)
+        
+        self.random_comment_percentage = QLineEdit("100")
+        self.random_comment_percentage.setFixedWidth(60)
+        self.random_comment_percentage.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 为文本框添加失去焦点事件处理
+        self.random_comment_percentage.editingFinished.connect(self.save_settings)
+        
+        random_percentage_layout.addWidget(self.random_comment_percentage)
+        random_percentage_layout.addWidget(QLabel("%"))
+        random_percentage_layout.addStretch()
+        rating_layout.addLayout(random_percentage_layout)
+        
         # 评星的打几星
         star_rating_layout = QHBoxLayout()
         star_rating_layout.setSpacing(10)

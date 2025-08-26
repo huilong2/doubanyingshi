@@ -69,6 +69,7 @@
 | **评星设置** | |
 | 随机评星 (最小) | `self.rating_min` |
 | 随机评星 (最大) | `self.rating_max` |
+| 随机百分比评论 | `self.random_comment_percentage` |
 | 评星星级输入框 | `self.star_rating` |
 | 评星类型下拉框 | `self.rating_type` |
 | **输入内容** | |
