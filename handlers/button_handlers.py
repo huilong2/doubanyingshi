@@ -382,9 +382,10 @@ def clear_random_contents_handler(window):
 def on_run_start_clicked_handler(window):
     """运行开始点击处理函数"""
     print("🔍 DEBUG: 开始按钮被点击了！")
-    print(f"🔍 DEBUG: 当前选择框的值: '{window.run_mode_combo.currentText()}'")
-    print(f"🔍 DEBUG: 选择框索引: {window.run_mode_combo.currentIndex()}")
-    
+    print(f"🔍 DEBUG: 当前_运行模式_值: '{window.run_mode_combo.currentText()}'")
+    print(f"🔍 DEBUG: 当前_运行模式_索引: {window.run_mode_combo.currentIndex()}")
+    print(f"🔍 DEBUG: 选择框_类型_文本值: {window.run_status_combo.currentText()}")
+    print(f"🔍 DEBUG: 选择框_类型_索引: {window.run_status_combo.currentIndex()}")
     # 分组选择检查已删除
     
     # 获取选择框的当前值

@@ -4,6 +4,17 @@ import time
 import json
 
 # 从 peizhi.json 加载设置
+def get_status(status_str):
+    if status_str == "看过":
+        return "COLLECT"
+    elif status_str == "在看":
+        return "DO"
+    elif status_str == "想看":
+        return "WISH"
+    else:
+        return None
+
+
 def load_settings():
     try:
         with open('data/peizhi.json', 'r', encoding='utf-8') as f:
@@ -126,10 +137,33 @@ def 执行随机评论操作(username, account, ):
         result, rating_type = 随机打星_电影电视音乐读书()
         if result is None:
             print(f"警告: 未能获取到{rating_type}数据，跳过本次评星")
-            continue
-    
-    # TODO: 实现具体的评论逻辑
+            continue    
+        else:
+         # 当有数据时，执行后续步骤
+            print(f"成功获取{rating_type}数据，开始处理...")
+            import douban_xieyi  
+            # 假设界面上的文本框对象名为 star_rating_textbox，获取其文本内容
+            star_rating = star_rating_textbox.get()
+            values_list = star_rating.split('|')
+            dajixing = random.choice(values_list)
+            print(dajixing)
+            print(f"🔍 DEBUG: 选择框_类型_文本值: {window.run_status_combo.currentText()}")
+            print(f"🔍 DEBUG: 选择框_类型_索引: {window.run_status_combo.currentIndex()}")
+            # 分组选择检查已删除
+            # 获取选择框的当前值
+            rating_type = window.rating_type.currentText()
+          
+            interest = get_status(rating_type)
 
+
+            douban_xieyi.submit_movie_rating(   
+                movie_id=result[0],
+                interest="watch",
+                rating=dajixing
+                comment=result[4],
+                proxy=account[10],
+                verify=False
+            )
 
 # 随机评论（）    # 这行代码已注释，避免语法错误
 
