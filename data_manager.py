@@ -397,13 +397,14 @@ class DataManager:
             return False
     
     def delete_account(self, account_id):
-        """删除账号"""
+        """删除账号，返回是否真的删除了行"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute('DELETE FROM accounts WHERE id = ?', (account_id,))
+        affected = cursor.rowcount
         conn.commit()
         conn.close()
-        return True
+        return affected > 0
     
     # ==================== 电影数据管理方法 ====================
     

@@ -1,6 +1,6 @@
 {
-  "browser_path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe ",
-  "browser_cache_path": "E:/liulanqi",
+  "browser_path": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "browser_cache_path": "/Users/xujianye/Desktop/python的项目/liulanqihuancun",
   "function_settings": {
     "signature": false,
     "status": false,

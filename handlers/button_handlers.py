@@ -21,6 +21,21 @@ from config import DATA_DIR as quan_shujuwenjianjia
 # 配置日志
 logger = logging.getLogger(__name__)
 
+# 中文确认对话框助手
+from PySide6.QtWidgets import QMessageBox
+
+def ask_yes_no(parent, title, text):
+    """显示中文的 是/否 确认对话框，返回 QMessageBox.StandardButton.Yes 或 No"""
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Icon.Question)
+    box.setWindowTitle(title)
+    box.setText(text)
+    yes_btn = box.addButton("是", QMessageBox.ButtonRole.YesRole)
+    no_btn = box.addButton("否", QMessageBox.ButtonRole.NoRole)
+    box.setDefaultButton(yes_btn)
+    box.exec()
+    return QMessageBox.StandardButton.Yes if box.clickedButton() == yes_btn else QMessageBox.StandardButton.No
+
 def add_account_handler(window):
     """添加账号处理函数"""
     from ui.dialogs import AccountDialog
@@ -75,7 +90,7 @@ def edit_account_handler(window):
         return
     
     row = selected_items[0].row()
-    username = window.account_table.item(row, 2).text()  # 用户名列
+    username = window.account_table.item(row, 1).text()  # 用户名在第1列（索引1）
     
     # 获取账号信息
     accounts = window.data_manager.get_accounts()
@@ -112,28 +127,40 @@ def edit_account_handler(window):
 
 def delete_account_handler(window):
     """删除账号处理函数"""
+    # logger.debug("[删除账号] 点击删除账号按钮")
     # 获取所有勾选的账号行
     selected_rows = set()
     for row in range(window.account_table.rowCount()):
         checkbox_item = window.account_table.item(row, 0)
         if checkbox_item and checkbox_item.checkState() == Qt.CheckState.Checked:
             selected_rows.add(row)
+    # logger.debug(f"[删除账号] 勾选的行数: {len(selected_rows)}")
     
     if not selected_rows:
         QMessageBox.warning(window, "警告", "请先勾选要删除的账号")
         return
     
+    # 预览将要删除的用户名
+    try:
+        preview_usernames = []
+        for row in sorted(selected_rows):
+            item = window.account_table.item(row, 1)
+            preview_usernames.append(item.text() if item else "<空>")
+        # logger.debug(f"[删除账号] 即将删除的用户名: {preview_usernames}")
+    except Exception as e:
+        logger.warning(f"[删除账号] 预览用户名失败: {str(e)}")
+    
     # 确认删除
-    reply = QMessageBox.question(window, "确认删除", 
-                               f"确定要删除选中的 {len(selected_rows)} 个账号吗？\n此操作不可恢复！",
-                               QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+    reply = ask_yes_no(window, "确认删除", f"确定要删除选中的 {len(selected_rows)} 个账号吗？\n此操作不可恢复！")
+    # logger.debug(f"[删除账号] 用户确认结果: {reply}")
     
     if reply == QMessageBox.StandardButton.Yes:
         deleted_count = 0
         for row in sorted(selected_rows, reverse=True):
             try:
-                # 获取账号信息
-                username = window.account_table.item(row, 2).text()  # 用户名列
+                # 获取账号信息 - 用户名在第1列（索引1）
+                username = window.account_table.item(row, 1).text()  # 用户名列
+                # logger.debug(f"[删除账号] 处理行 row={row} username={username}")
                 accounts = window.data_manager.get_accounts()
                 account_info = None
                 for account in accounts:
@@ -142,9 +169,11 @@ def delete_account_handler(window):
                         break
                 
                 if account_info:
+                    # logger.debug(f"准备删除账号 id={account_info[0]} username={username}")
                     # 删除账号数据
                     if window.data_manager.delete_account(account_info[0]):
                         deleted_count += 1
+                        # logger.debug(f"账号删除成功 id={account_info[0]} username={username}")
                         
                         # 删除账号相关的缓存文件和目录
                         try:
@@ -152,23 +181,28 @@ def delete_account_handler(window):
                             
                             # 删除浏览器缓存目录
                             if delete_account_cache(username):
-                                logger.info(f"已删除账号 {username} 的缓存目录")
+                                pass
                             else:
                                 logger.warning(f"删除账号 {username} 缓存目录失败")
                                 
                         except Exception as e:
                             logger.error(f"删除账号缓存文件失败: {str(e)}")
+                    else:
+                        logger.warning(f"账号删除失败或未找到记录 id={account_info[0]} username={username}")
+                else:
+                    logger.warning(f"[删除账号] 未在数据库中找到用户名: {username}")
                 
             except Exception as e:
                 logger.error(f"删除账号时出错: {str(e)}")
         
         # 刷新账号列表
         window.load_accounts()
+        logger.info(f"[删除账号] 删除完成，实际删除数量: {deleted_count}")
         
         if deleted_count > 0:
             QMessageBox.information(window, "成功", f"已成功删除 {deleted_count} 个账号")
         else:
-            QMessageBox.warning(window, "失败", "删除账号失败")
+            QMessageBox.warning(window, "失败", "删除账号失败，请查看控制台日志定位问题")
 
 def add_proxy_handler(window):
     """添加代理处理函数"""
@@ -221,7 +255,7 @@ def add_proxy_handler(window):
         if proxy:
             success_count = 0
             for row in selected_rows:
-                username = window.account_table.item(row, 2).text()  # 修正：用户名在第2列（索引2）
+                username = window.account_table.item(row, 1).text()  # 用户名在第1列（索引1）
                 # 获取当前账号的所有信息
                 accounts = window.data_manager.get_accounts()
                 for account in accounts:
@@ -258,65 +292,82 @@ def add_proxy_handler(window):
 
 def remove_proxy_handler(window):
     """删除代理处理函数"""
+    # logger.debug("[删除代理] 点击删除代理按钮")
     # 获取选中行的账号（基于复选框状态）
     selected_rows = set()
     for row in range(window.account_table.rowCount()):
         checkbox_item = window.account_table.item(row, 0)
         if checkbox_item and checkbox_item.checkState() == Qt.CheckState.Checked:
             selected_rows.add(row)
+    # logger.debug(f"[删除代理] 勾选的行数: {len(selected_rows)}")
     
     if not selected_rows:
         QMessageBox.warning(window, "警告", "请先勾选要删除代理的账号")
         return
     
-    # 获取账号数据
-    account_data = window.data_manager.get_accounts()
-    if not account_data or len(account_data) == 0:
-        return
-    
     # 检查是否有账号设置了代理
     has_proxy = False
+    preview = []
     for row in selected_rows:
-        if row < len(account_data) and account_data[row][9]:  # 第10列是代理IP列
-            has_proxy = True
-            break
+        if row < window.account_table.rowCount():
+            proxy_item = window.account_table.item(row, 9)  # 第9列是代理IP列（索引从0开始）
+            username_item = window.account_table.item(row, 1)
+            username_val = username_item.text() if username_item else "<空>"
+            preview.append((row, username_val, proxy_item.text() if proxy_item else ""))
+            if proxy_item and proxy_item.text():
+                has_proxy = True
+    # logger.debug(f"[删除代理] 选中行概览: {preview}")
     
     if not has_proxy:
         QMessageBox.information(window, "提示", "选中的账号均未设置代理")
         return
     
     # 确认删除
-    reply = QMessageBox.question(window, "确认删除", f"确定要删除这 {len(selected_rows)} 个账号的代理吗？")
+    reply = ask_yes_no(window, "确认删除", f"确定要删除这 {len(selected_rows)} 个账号的代理吗？")
+    # logger.debug(f"[删除代理] 用户确认结果: {reply}")
     if reply == QMessageBox.StandardButton.Yes:
+        # 获取账号数据
+        accounts = window.data_manager.get_accounts()
         success_count = 0
+        
         # 清除代理信息
         for row in selected_rows:
-            if row < len(account_data):
-                # 检查是否已有代理
-                if account_data[row][9]:  # 第10列是代理IP列
-                    # 获取账号ID（第一列）
-                    account_id = account_data[row][0]
-                    # 更新数据库中的代理信息
-                    if window.data_manager.update_account(account_id, {
-                        'username': account_data[row][1],
-                        'password': account_data[row][2] or '',
-                        'ck': account_data[row][3] or '',
-                        'nickname': account_data[row][4] or '',
-                        'account_id': account_data[row][5] or '',
-                        'login_status': account_data[row][6] or '',
-                        'homepage': account_data[row][7] or '',
-                        'login_time': account_data[row][8] or '',
-                        'proxy': '',  # 清空代理
-                        'running_status': account_data[row][10] or '',
-                        'note': account_data[row][11] or ''
-                    }):
-                        success_count += 1
-        
-        # 更新表格显示
-        for row in selected_rows:
             if row < window.account_table.rowCount():
-                proxy_item = QTableWidgetItem('')
-                window.account_table.setItem(row, 9, proxy_item)  # 第10列是代理IP列
+                # 获取用户名
+                username = window.account_table.item(row, 1).text()
+                # logger.debug(f"[删除代理] 处理行 row={row} username={username}")
+                
+                # 在数据库中查找对应的账号
+                account_info = None
+                for account in accounts:
+                    if account[1] == username:
+                        account_info = account
+                        break
+                
+                if account_info:
+                    # 更新数据库中的代理信息
+                    ok = window.data_manager.update_account(account_info[0], {
+                        'username': account_info[1],
+                        'password': account_info[2] or '',
+                        'ck': account_info[3] or '',
+                        'nickname': account_info[4] or '',
+                        'account_id': account_info[5] or '',
+                        'login_status': account_info[6] or '',
+                        'homepage': account_info[7] or '',
+                        'login_time': account_info[8] or '',
+                        'proxy': '',  # 清空代理
+                        'running_status': account_info[10] or '',
+                        'note': account_info[11] or ''
+                    })
+                    # logger.debug(f"[删除代理] 更新结果: {ok}")
+                    if ok:
+                        success_count += 1
+                else:
+                    logger.warning(f"[删除代理] 未在数据库中找到用户名: {username}")
+        
+        # 刷新账号列表以更新显示
+        window.load_accounts()
+        # logger.debug(f"[删除代理] 完成，成功删除代理数量: {success_count}")
         QMessageBox.information(window, "成功", f"成功为 {success_count} 个账号删除代理")
 
 def clear_all_movies_handler(window):
@@ -472,7 +523,7 @@ def add_movie_handler(window, movie_type):
     
     # 创建多行文本输入区域
     movie_edit = QPlainTextEdit()
-    movie_edit.setPlaceholderText("请输入电影信息，每行一个电影...\n例如：\n1234567\n2345678,3星\n3456789,5星")
+    movie_edit.setPlaceholderText("请输入电影信息，每行一个...\n例如：\n1234567\n2345678,3星\n3456789,5星")
     movie_edit.setMinimumHeight(200)
     
     layout.addRow("电影列表:", movie_edit)

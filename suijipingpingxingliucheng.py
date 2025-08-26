@@ -142,26 +142,24 @@ def 执行随机评论操作(username, account, ):
          # 当有数据时，执行后续步骤
             print(f"成功获取{rating_type}数据，开始处理...")
             import douban_xieyi  
-            # 假设界面上的文本框对象名为 star_rating_textbox，获取其文本内容
-            star_rating = star_rating_textbox.get()
-            values_list = star_rating.split('|')
-            dajixing = random.choice(values_list)
-            print(dajixing)
-            print(f"🔍 DEBUG: 选择框_类型_文本值: {window.run_status_combo.currentText()}")
-            print(f"🔍 DEBUG: 选择框_类型_索引: {window.run_status_combo.currentIndex()}")
-            # 分组选择检查已删除
-            # 获取选择框的当前值
-            rating_type = window.rating_type.currentText()
-          
-            interest = get_status(rating_type)
+            # 从配置读取评星列表与状态
+            star_rating_str = str(config.get('star_rating', '3|4|5'))
+            values_list = [v for v in star_rating_str.split('|') if v]
+            dajixing = random.choice(values_list) if values_list else '3'
+            print(f"选择的星级: {dajixing}")
+            run_status = config.get('run_status', '看过')
+            interest = get_status(run_status)
 
+            # 取对应表的条目ID作为 movie_id（第2列为 *_id）
+            movie_id = result[1]
+            comment_text = ""
 
-            douban_xieyi.submit_movie_rating(   
-                movie_id=result[0],
-                interest="watch",
-                rating=dajixing
-                comment=result[4],
-                proxy=account[10],
+            douban_xieyi.submit_movie_rating(
+                movie_id=movie_id,
+                interest=interest,
+                rating=dajixing,
+                comment=comment_text,
+                proxy=account[9],
                 verify=False
             )
 
