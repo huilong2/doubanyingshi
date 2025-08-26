@@ -2,6 +2,7 @@ from data_manager import DataManager
 import random
 import time
 import json
+from qitagongju.qita import 获取ai短语
 
 # 从 peizhi.json 加载设置
 def get_status(status_str):
@@ -65,39 +66,39 @@ def 随机打星_电影电视音乐读书(window):
     }
     
     # 从UI组件获取rating_type值
-    random_choice = window.rating_type.currentIndex()
+    dianying_leixing_xuhao = window.rating_type.currentIndex()
     # 根据选择的索引确定表名
-    if random_choice == 4:  # 随机选择
-        random_choice = random.randint(0, 3)
-        if random_choice == 0:
-            table_name = 'dianying'
-        elif random_choice == 1:
-            table_name = 'dianshi'
-        elif random_choice == 2:
-            table_name = 'dushu'
+    if dianying_leixing_xuhao == 4:  # 随机选择
+        dianying_leixing_xuhao = random.randint(0, 3)
+        if dianying_leixing_xuhao == 0:
+            shujuku_biaoming = 'dianying'
+        elif dianying_leixing_xuhao == 1:
+            shujuku_biaoming = 'dianshi'
+        elif dianying_leixing_xuhao == 2:
+            shujuku_biaoming = 'dushu'
         else:
-            table_name = 'yinyue'
+            shujuku_biaoming = 'yinyue'
     else:
         # 根据索引选择对应的表
         rating_types = ['电影', '电视', '读书', '音乐']
-        if 0 <= random_choice < len(rating_types):
-            table_name = table_mapping[rating_types[random_choice]]
+        if 0 <= dianying_leixing_xuhao < len(rating_types):
+            shujuku_biaoming = table_mapping[rating_types[dianying_leixing_xuhao]]
         else:
             # 如果索引无效，默认使用'电影'
-            table_name = 'dianying'
+            shujuku_biaoming = 'dianying'
     
     # 从数据库中随机获取一个完整记录
-    random_record = 随机获取一个数据(table_name)
-    if random_record:
-        print (random_record[1], random_record[2], random_record[3])
+    shuju_shuzu = 随机获取一个数据(shujuku_biaoming)
+    if shuju_shuzu:
+        print (shuju_shuzu[1], shuju_shuzu[2], shuju_shuzu[3])
         # 获取对应的类型名称
         rating_types = ['电影', '电视', '读书', '音乐']
-        type_name = rating_types[random_choice] if 0 <= random_choice < len(rating_types) else '电影'
+        type_name = rating_types[dianying_leixing_xuhao] if 0 <= dianying_leixing_xuhao < len(rating_types) else '电影'
         # 返回随机记录、类型名称、表名和random_choice
-        return random_record, type_name, table_name, random_choice
+        return shuju_shuzu, type_name, shujuku_biaoming, dianying_leixing_xuhao
     else:
-        print(f"表 {table_name} 中没有数据")
-        return None, '电影', table_name, random_choice
+        print(f"表 {shujuku_biaoming} 中没有数据")
+        return None, '电影', shujuku_biaoming, dianying_leixing_xuhao
     
     print("随机打星_电影电视音乐读书")
  
@@ -134,13 +135,13 @@ def 执行随机评论操作(username, account, window):
         caozuojiange = random.randint(operation_interval_min, operation_interval_max)
         print(f"第 {i + 1} 次循环 延迟：{caozuojiange}")
         time.sleep(caozuojiange)
-        result, rating_type, neixing, random_choice = 随机打星_电影电视音乐读书(window)
-        if result is None:
-            print(f"警告: 未能获取到{rating_type}数据，跳过本次评星")
+        shuju_shuzu, type_name, shujuku_biaoming, dianying_leixing_xuhao = 随机打星_电影电视音乐读书(window)
+        if shuju_shuzu is None:
+            print(f"警告: 未能获取到{type_name}数据，跳过本次评星")
             continue    
         else:
          # 当有数据时，执行后续步骤
-            print(f"成功获取{rating_type}数据，开始处理...")
+            print(f"成功获取{type_name}数据，开始处理...")
             import douban_xieyi  
             # 从配置读取评星列表与状态
             star_rating_str = str(config.get('star_rating', '3|4|5'))
@@ -149,15 +150,39 @@ def 执行随机评论操作(username, account, window):
             print(f"选择的星级: {dajixing}")
             run_status = config.get('run_status', '看过')
             interest = get_status(run_status)
-
+            if dianying_leixing_xuhao == 0 or dianying_leixing_xuhao == 1:
+                print(f"选择的类型: {type_name}")
+                baifenbi_text = window.percentage_label.text() if hasattr(window.percentage_label, 'text') else ''
+                print(f"百分比文本: {baifenbi_text}")
+                random_number = random.randint(1, 100)
+                print(f"随机数: {random_number}")
+                # 安全地将百分比文本转换为整数，默认为0
+                try:
+                    percentage = int(baifenbi_text)
+                except (ValueError, TypeError):
+                    print(f"警告: 无效的百分比值 '{baifenbi_text}'，使用默认值0")
+                    percentage = 0
+                if random_number <= percentage:
+                    comment_text = 获取ai短语(shuju_shuzu[1])
+                    print(f"获取到的ai短语: {comment_text}")
+                else:
+                    print(f"没有获取到ai短语")
+                    comment_text = ""
+            else:
+                comment_text = ""
             # 取对应表的条目ID作为 movie_id（第2列为 *_id）
-            movie_id = result[1]
-            comment_text = ""
-
+            movie_id = shuju_shuzu[1]
+            # 从account中获取cookie（根据之前的代码结构，cookie在第4个位置，索引为3）
+            cookie = account[3] if len(account) > 3 else ''
+            # 尝试从window获取user_agent，如果不可用则使用默认值
+            user_agent = window.user_agent if hasattr(window, 'user_agent') else 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+            
             douban_xieyi.submit_movie_rating(
+                cookie=cookie,
                 movie_id=movie_id,
-                interest=interest,
                 rating=dajixing,
+                interest=interest,
+                user_agent=user_agent,
                 comment=comment_text,
                 proxy=account[9],
                 verify=False
