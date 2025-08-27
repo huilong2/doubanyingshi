@@ -197,56 +197,91 @@ class LiulanqiGongcaozuo:
             logger.error(f"更新账号状态失败: {str(e)}")
 
     async def chushihua(self) -> None:
-        """初始化浏览器"""
+        """初始化浏览器 - 增强版，确保资源完全释放"""
         try:
             logger.info("开始初始化浏览器...")
+            
+            # 1. 首先尝试终止所有可能残留的Chrome进程
+            self._terminate_orphaned_chrome_processes()
             
             # 重置关闭状态
             self._is_closed = False
             
-            # 若已有残留实例，先尝试关闭，避免重复启动失败
+            # 2. 若已有残留实例，先尝试关闭，避免重复启动失败
             try:
-                if getattr(self.controller, 'browser', None):
+                if hasattr(self, 'controller') and getattr(self.controller, 'browser', None):
                     logger.info("检测到残留浏览器实例，尝试先关闭...")
                     self.controller.guanbi_liulanqi()
                     await asyncio.sleep(0.5)
             except Exception as _e:
                 logger.debug(f"关闭残留实例时忽略错误: {_e}")
             
-            # 创建用户数据目录
+            # 3. 强制清理可能的循环引用
+            import gc
+            gc.collect()
+            
+            # 4. 创建用户数据目录
             if self.peizhi.huanchunlujing:
                 user_data_dir = Path(self.peizhi.huanchunlujing)
                 user_data_dir.mkdir(parents=True, exist_ok=True)
                 logger.info(f"创建用户数据目录: {user_data_dir}")
             
-            # 使用新模块启动浏览器
-            start_url = self.peizhi.wangzhi
-            executable_path = self.peizhi.chrome_path
-            account_name = self.peizhi.zhanghao
-            cache_root = self.peizhi.huanchunlujing
+            # 5. 浏览器启动增强：添加重试机制
+            max_retries = 3
+            retry_count = 0
+            browser_started = False
             
-            # 如果Chrome路径为空，让新模块自动查找
-            if not executable_path:
-                executable_path = self._find_chrome_path()
+            while retry_count < max_retries and not browser_started:
+                try:
+                    retry_count += 1
+                    
+                    # 使用新模块启动浏览器
+                    start_url = self.peizhi.wangzhi
+                    executable_path = self.peizhi.chrome_path
+                    account_name = self.peizhi.zhanghao
+                    cache_root = self.peizhi.huanchunlujing
+                    
+                    # 如果Chrome路径为空，让新模块自动查找
+                    if not executable_path:
+                        executable_path = self._find_chrome_path()
+                    
+                    # 启动浏览器（使用新模块的拼音API）
+                    self.controller.qiyong_liulanqi(
+                        executable_path=executable_path,
+                        start_url=start_url,
+                        account_name=account_name,
+                        cache_root=cache_root
+                    )
+                    
+                    # 智能等待浏览器启动完成 - 等待页面对象可用
+                    await self._wait_for_browser_ready()
+                    
+                    # 检查浏览器是否成功启动
+                    if not self.controller.browser:
+                        raise Exception("浏览器启动失败")
+                    
+                    # 检查context是否可用
+                    if not self.controller.context:
+                        raise Exception("浏览器上下文启动失败")
+                    
+                    browser_started = True
+                    logger.info(f"浏览器初始化成功 (尝试 {retry_count}/{max_retries})")
+                    
+                except Exception as retry_err:
+                    logger.warning(f"浏览器初始化尝试 {retry_count}/{max_retries} 失败: {str(retry_err)}")
+                    # 清理失败的实例引用
+                    if hasattr(self, 'controller'):
+                        try:
+                            if hasattr(self.controller, 'guanbi_liulanqi'):
+                                self.controller.guanbi_liulanqi()
+                        except:
+                            pass
+                    # 重试前等待1秒
+                    if retry_count < max_retries:
+                        await asyncio.sleep(1)
             
-            # 启动浏览器（使用新模块的拼音API）
-            self.controller.qiyong_liulanqi(
-                executable_path=executable_path,
-                start_url=start_url,
-                account_name=account_name,
-                cache_root=cache_root
-            )
-            
-            # 智能等待浏览器启动完成 - 等待页面对象可用
-            await self._wait_for_browser_ready()
-            
-            # 检查浏览器是否成功启动
-            if not self.controller.browser:
-                raise Exception("浏览器启动失败")
-            
-            # 检查context是否可用
-            if not self.controller.context:
-                raise Exception("浏览器上下文启动失败")
+            if not browser_started:
+                raise Exception(f"浏览器初始化失败，已尝试 {max_retries} 次")
             
             # 应用指纹数据
             if self.peizhi.fingerprint:
@@ -255,28 +290,59 @@ class LiulanqiGongcaozuo:
             # 更新状态
             self.update_status("已启动")
             
-            logger.info("浏览器初始化成功")
-            
         except Exception as e:
             error_msg = f"浏览器初始化失败: {str(e)}"
             logger.error(error_msg)
             self.update_status("初始化失败")
+            # 确保清理资源
+            await self._cleanup_resources()
             raise
-
-    async def _wait_for_browser_ready(self, timeout: int = DEFAULT_BROWSER_TIMEOUT):
-        """智能等待浏览器准备就绪"""
-        start_time = asyncio.get_event_loop().time()
-        
-        while asyncio.get_event_loop().time() - start_time < timeout:
-            if (self.controller.browser and 
-                self.controller.context and 
-                self.controller.page):
-                logger.info("浏览器已准备就绪")
-                return
-            await asyncio.sleep(0.1)
-        
-        raise Exception(f"浏览器启动超时 ({timeout}秒)")
-
+    
+    def _terminate_orphaned_chrome_processes(self):
+        """终止所有可能的孤立Chrome进程"""
+        try:
+            import psutil
+            logger.info("开始清理孤立的Chrome进程")
+            
+            # 获取所有Chrome进程
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    if 'chrome' in proc.name().lower():
+                        # 检查是否有我们的用户数据目录标记
+                        cmdline = ' '.join(proc.cmdline() or [])
+                        if hasattr(self.peizhi, 'huanchunlujing') and self.peizhi.huanchunlujing and self.peizhi.huanchunlujing in cmdline:
+                            logger.info(f"终止孤立的Chrome进程: PID={proc.pid}, 命令行={cmdline}")
+                            proc.terminate()
+                            # 等待进程终止，最多等待2秒
+                            try:
+                                proc.wait(timeout=2)
+                            except psutil.TimeoutExpired:
+                                logger.warning(f"强制终止进程: PID={proc.pid}")
+                                proc.kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    pass
+            
+            logger.info("孤立Chrome进程清理完成")
+        except ImportError:
+            logger.warning("psutil库未安装，无法自动清理Chrome进程")
+        except Exception as e:
+            logger.error(f"清理Chrome进程时出错: {str(e)}")
+    
+    async def _cleanup_resources(self):
+        """清理所有浏览器相关资源"""
+        try:
+            if hasattr(self, 'controller') and self.controller:
+                if hasattr(self.controller, 'browser'):
+                    self.controller.browser = None
+                if hasattr(self.controller, 'context'):
+                    self.controller.context = None
+                if hasattr(self.controller, 'page'):
+                    self.controller.page = None
+                if hasattr(self.controller, 'playwright'):
+                    self.controller.playwright = None
+        except Exception as e:
+            logger.error(f"清理资源时出错: {str(e)}")
+    
     async def dakai_ye(self, url: Optional[str] = None) -> None:
         """
         打开指定网页
@@ -362,6 +428,34 @@ class LiulanqiGongcaozuo:
             logger.warning(f"等待页面元素超时，继续执行: {e}")
             # 即使超时也继续执行，不阻塞流程
 
+    async def _wait_for_browser_ready(self, timeout: int = DEFAULT_BROWSER_TIMEOUT):
+        """智能等待浏览器准备就绪"""
+        logger.info(f"开始等待浏览器准备就绪，超时时间: {timeout}秒")
+        start_time = asyncio.get_event_loop().time()
+        
+        # 最多等待timeout秒
+        while asyncio.get_event_loop().time() - start_time < timeout:
+            # 检查浏览器核心组件是否都已初始化
+            try:
+                if (hasattr(self.controller, 'browser') and self.controller.browser and 
+                    hasattr(self.controller, 'context') and self.controller.context and 
+                    hasattr(self.controller, 'page') and self.controller.page):
+                    logger.info("浏览器已准备就绪")
+                    return
+            except Exception as e:
+                logger.warning(f"检查浏览器组件时出错: {e}")
+            
+            # 等待100毫秒后再次检查
+            await asyncio.sleep(0.1)
+        
+        # 超时后，打印详细的组件状态信息用于调试
+        browser_status = '可用' if (hasattr(self.controller, 'browser') and self.controller.browser) else '不可用'
+        context_status = '可用' if (hasattr(self.controller, 'context') and self.controller.context) else '不可用'
+        page_status = '可用' if (hasattr(self.controller, 'page') and self.controller.page) else '不可用'
+        
+        logger.error(f"浏览器启动超时 ({timeout}秒) - 组件状态: browser={browser_status}, context={context_status}, page={page_status}")
+        raise Exception(f"浏览器启动超时 ({timeout}秒)")
+    
     async def _get_douban_user_info(self) -> Optional[Dict[str, Any]]:
         """获取豆瓣用户信息"""
         try:
@@ -375,9 +469,37 @@ class LiulanqiGongcaozuo:
             logger.error(f"获取用户信息失败: {str(e)}")
             return None
 
+    async def _get_cookie_string(self):
+        """获取当前浏览器的Cookie字符串"""
+        if not self.controller or not self.controller.context:
+            self.log_event("警告", "浏览器上下文未初始化，无法获取Cookie")
+            return ""
+        try:
+            # 使用Playwright API获取所有Cookie
+            cookies = await self.controller.context.cookies()
+            # 转换为标准Cookie字符串格式
+            cookie_str = "; ".join([f"{cookie['name']}={cookie['value']}" for cookie in cookies])
+            self.log_event("调试", f"成功获取Cookie，长度: {len(cookie_str)} 字符")
+            return cookie_str
+        except Exception as e:
+            self.log_event("错误", f"获取Cookie失败: {str(e)}")
+            return ""
+
     def _update_douban_account_info(self, user_info: Dict[str, Any], login_status: str):
         """更新豆瓣账号信息到数据库"""
         try:
+            # 获取Cookie字符串（使用同步方式调用异步方法）
+            import asyncio
+            cookie_str = ""
+            try:
+                if self.controller and hasattr(self.controller, '_loop'):
+                    future = asyncio.run_coroutine_threadsafe(self._get_cookie_string(), self.controller._loop)
+                    cookie_str = future.result(timeout=5)  # 5秒超时
+                    print(f"[调试] 获取到的Cookie: {cookie_str[:30]}...")  # 调试信息
+            except Exception as e:
+                self.log_event("警告", f"获取Cookie时出错: {str(e)}")
+                print(f"[错误] 获取Cookie失败: {str(e)}")  # 调试信息
+                
             if self.db_manager:
                 accounts = self.db_manager.get_accounts()
                 for account in accounts:
@@ -386,21 +508,25 @@ class LiulanqiGongcaozuo:
                         user_info_for_db = {
                             'login_status': login_status,
                             'name': user_info.get('name'),
-                            'id': user_info.get('id')
+                            'id': user_info.get('id'),
+                            'ck': cookie_str  # 添加Cookie信息
                         }
                         
-                        # 使用工具类创建标准化的账号数据
+                        # 使用DoubanUtils创建标准的账号数据（使用正确的account对象）
                         from douban_utils import DoubanUtils
                         account_data = DoubanUtils.create_account_data(
-                            account, user_info_for_db, account[3], account[10]
+                            account=account,
+                            user_info=user_info,
+                            cookie_str=cookie_str
                         )
-                        self.db_manager.update_account(account[0], account_data)
                         
-                        if self.browser_signals:
-                            self.browser_signals.info.emit("账号信息已更新")
+                        # 更新账号信息到数据库（使用正确的参数格式）
+                        self.db_manager.update_account(account[0], account_data)
+                        self.log_event("信息", f"已更新账号信息: {account_data.get('username', '未知')}，Cookie已保存")
+                        print(f"[调试] 已保存Cookie到账号 {account[0]}")  # 调试信息
                         break
         except Exception as e:
-            logger.error(f"更新账号信息失败: {str(e)}")
+            self.log_event("错误", f"更新账号信息失败: {str(e)}")
 
     async def zhixing_script(self, script: str) -> Any:
         """
@@ -424,7 +550,7 @@ class LiulanqiGongcaozuo:
                 raise Exception(f"执行脚本失败: {str(e)}")
 
     async def guanbi(self):
-        """关闭浏览器"""
+        """关闭浏览器 - 终极版，确保所有资源完全释放"""
         try:
             if self._is_closed:
                 logger.info("浏览器已经关闭")
@@ -433,19 +559,52 @@ class LiulanqiGongcaozuo:
             logger.info("开始关闭浏览器...")
             self._is_closed = True
 
-            # 使用新模块关闭浏览器（使用拼音API）
-            self.controller.guanbi_liulanqi()
+            # 1. 直接调用异步关闭方法，确保完全关闭
+            if hasattr(self.controller, '_async_close'):
+                try:
+                    # 等待浏览器异步关闭操作完成，设置超时为5秒
+                    close_future = asyncio.run_coroutine_threadsafe(self.controller._async_close(), asyncio.get_event_loop())
+                    close_future.result(timeout=5)  # 等待最多5秒
+                except asyncio.TimeoutError:
+                    logger.warning("浏览器关闭超时，继续执行清理")
+                except Exception as inner_e:
+                    logger.error(f"异步关闭浏览器时出错: {str(inner_e)}")
+            else:
+                # 降级方案：使用拼音API
+                try:
+                    self.controller.guanbi_liulanqi()
+                    # 等待0.5秒让关闭操作有时间完成
+                    await asyncio.sleep(0.5)
+                except Exception as e:
+                    logger.warning(f"使用拼音API关闭浏览器时出错: {str(e)}")
 
-            logger.info("浏览器关闭完成")
-            # 将底层引用清空，避免二次启动拿到过期对象
+            # 2. 强制清空所有底层引用，确保不会拿到过期对象
             try:
-                setattr(self.controller, 'page', None)
-                setattr(self.controller, 'context', None)
-                setattr(self.controller, 'browser', None)
-            except Exception:
-                pass
+                if hasattr(self, 'controller'):
+                    self.controller.page = None
+                    self.controller.context = None
+                    self.controller.browser = None
+                    self.controller.playwright = None
+            except Exception as e:
+                logger.error(f"清空浏览器引用失败: {str(e)}")
+                
+            # 3. 强制垃圾回收 - 多次执行确保清理彻底
+            import gc
+            for _ in range(3):
+                gc.collect()
+                await asyncio.sleep(0.1)
+            
+            # 4. 额外延迟以确保操作系统完成资源回收
+            await asyncio.sleep(0.5)
+            
+            # 5. 终止可能残留的Chrome进程
+            self._terminate_orphaned_chrome_processes()
+            
+            logger.info("浏览器资源清理完成")
         except Exception as e:
             logger.error(f"关闭浏览器时出错: {str(e)}")
+            # 发生错误也要确保标记为关闭
+            self._is_closed = True
 
     async def huoqu_zhinwen(self) -> Dict[str, Any]:
         """

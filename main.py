@@ -58,7 +58,7 @@ def setup_logging():
         # 确保日志目录和文件有正确的权限
         try:
             # 设置目录权限为 755
-            os.chmod(log_dir, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
+            os.chmod(log_file.parent, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
             # 如果日志文件存在，设置文件权限为 644
             if log_file.exists():
                 os.chmod(log_file, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
@@ -1258,7 +1258,7 @@ class AccountManagerWindow(QMainWindow):
 
     async def _safe_open_browser(self, zhixingmoshi="denglu"):
         """
-        安全打开浏览器
+        安全打开浏览器，确保资源正确释放
         
         Args:
             zhixingmoshi: 执行模式 ("denglu" 或 "gengxin")
@@ -1311,8 +1311,19 @@ class AccountManagerWindow(QMainWindow):
         # 创建任务流程控制器
         liucheng = RenwuLiucheng(self.data_manager, self.browser_signals)
         
+        # 为异步环境创建停止事件
+        stop_event = asyncio.Event()
+        
+        # 记录会话信息
+        self.active_browser_sessions[username] = {
+            'thread': threading.current_thread(),
+            'stop_event': stop_event,
+            'liulanqi': liucheng.liulanqi,
+            'loop': asyncio.get_event_loop()
+        }
+        
         logger.info(f"正在启动浏览器流程 - 用户: {username}, 模式: {zhixingmoshi}")
-        # 使用新的流程系统
+        
         try:
             # 执行浏览器流程
             result = await liucheng.qidong_liulanqi_liucheng(peizhi, zhixingmoshi)
@@ -1334,34 +1345,27 @@ class AccountManagerWindow(QMainWindow):
                     await liucheng.guanbi_liulanqi()
                     QTimer.singleShot(0, lambda: self.handle_browser_closed(username))
                 else:
-                    # 登录模式：保持浏览器打开，记录会话
-                    stop_event = threading.Event()
-                    self.active_browser_sessions[username] = {
-                        'thread': threading.current_thread(),
-                        'stop_event': stop_event,
-                        'liulanqi': liucheng.liulanqi
-                    }
-                    
-                    # 登录模式下不自动关闭浏览器，等待用户手动关闭
+                    # 登录模式：保持浏览器打开，等待用户手动关闭
                     self.browser_signals.info.emit("登录模式：浏览器已启动，请手动关闭浏览器")
                     logger.info(f"登录模式：浏览器已启动，等待用户手动关闭 - 用户: {username}")
                     
-                    # 登录模式下完全由用户手动控制浏览器关闭
-                    # 不进行任何自动检测，让浏览器保持打开状态
-                    logger.info(f"登录模式：浏览器已启动，完全由用户手动控制 - 用户: {username}")
-                    
-                    # 等待用户手动关闭浏览器（不进行任何检测）
+                    # 登录模式下等待停止事件被设置（由handle_browser_closed调用）
                     try:
-                        while not stop_event.is_set():
-                            # 只检查停止事件，不检查浏览器状态
-                            await asyncio.sleep(5)  # 每5秒检查一次停止事件
+                        # 使用asyncio的等待方式，而不是threading.Event
+                        await stop_event.wait()
+                        logger.info(f"收到停止信号，准备清理资源 - 用户: {username}")
+                    except asyncio.CancelledError:
+                        logger.info(f"异步任务被取消 - 用户: {username}")
                     except Exception as e:
-                        logger.info(f"登录模式检测循环结束: {str(e)}")
+                        logger.info(f"登录模式等待循环异常: {str(e)}")
                     
-                    # 登录模式下不自动关闭浏览器，让用户手动控制
-                    logger.info(f"登录模式：浏览器保持打开状态，由用户手动关闭 - 用户: {username}")
-                    # 不执行 guanbi_liulanqi()，让浏览器保持打开状态
-                    # 用户需要手动关闭浏览器窗口
+                    # 停止事件被设置后，确保关闭浏览器
+                    try:
+                        if liucheng.liulanqi:
+                            logger.info(f"自动关闭浏览器 - 用户: {username}")
+                            await liucheng.guanbi_liulanqi()
+                    except Exception as e:
+                        logger.error(f"自动关闭浏览器时出错: {str(e)}")
             else:
                 # 更新模式失败时也要自动关闭浏览器
                 if zhixingmoshi == "gengxin":
@@ -1395,16 +1399,12 @@ class AccountManagerWindow(QMainWindow):
     def refresh_account_info(self, username):
         """刷新指定账号的信息显示"""
         try:
-            # 获取当前选中的分组
-            selected_items = self.group_table.selectedItems()
-            current_group = selected_items[0].text() if selected_items else None
-            
             # 重新加载账号数据
-            self.load_accounts(current_group)
+            self.load_accounts()
             
             # 找到并选中更新后的账号行
             for row in range(self.account_table.rowCount()):
-                if self.account_table.item(row, 2).text() == username:  # 修正：用户名在第2列（索引2）
+                if self.account_table.item(row, 1).text() == username:  # 用户名在第1列（索引1）
                     self.account_table.selectRow(row)
                     break
                     
@@ -1413,15 +1413,36 @@ class AccountManagerWindow(QMainWindow):
             logger.error(f"刷新账号信息显示失败: {str(e)}")
 
     def handle_browser_closed(self, username):
-        """处理浏览器关闭事件"""
+        """处理浏览器关闭事件 - 确保所有资源正确释放"""
         try:
             logger.info(f"开始处理浏览器关闭事件 - 用户: {username}")
-            # 从活动会话中移除
+            
+            # 确保设置stop_event来终止异步循环
             if username in self.active_browser_sessions:
+                session = self.active_browser_sessions[username]
+                
+                # 设置stop_event来终止异步等待
+                if 'stop_event' in session:
+                    stop_event = session['stop_event']
+                    if hasattr(stop_event, 'set'):
+                        stop_event.set()
+                        logger.info(f"已设置停止事件 - 用户: {username}")
+                
+                # 清理浏览器实例引用
+                if 'liulanqi' in session:
+                    session['liulanqi'] = None
+                    logger.info(f"已清理浏览器实例引用 - 用户: {username}")
+                
+                # 从活动会话中移除
                 del self.active_browser_sessions[username]
                 logger.info(f"已从活动会话中移除浏览器 - 用户: {username}")
             else:
                 logger.info(f"浏览器不在活动会话中 - 用户: {username}")
+            
+            # 强制清理所有可能的残留资源
+            import gc
+            gc.collect()
+            logger.info(f"已执行垃圾回收，清理残留资源")
             
             # 刷新账号信息显示
             self.refresh_account_info(username)

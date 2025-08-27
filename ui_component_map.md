@@ -35,7 +35,7 @@
 | 指定电影表格 | `self.movie_specific_table` |
 | 随机电影表格 | `self.movie_random_table` |
 
-*注：此标签页中的 "添加"、"删除"、"更新星级" 等按钮是在 `init_movie_tab` 方法内部创建的局部变量，没有被赋给 `self`。它们的点击事件直接连接到了对应的处理函数。*
+*注：此标签页中的 "添加指定"、"添加随机"、"删除选中"、"批量删除"、"更新星级"、"清空所有" 等按钮是在 `init_movie_tab` 方法内部创建的局部变量，没有被赋给 `self`。它们的点击事件直接连接到了对应的处理函数。*
 
 ---
 
@@ -46,7 +46,7 @@
 | 指定内容表格 | `self.content_specific_table` |
 | 随机内容表格 | `self.content_random_table` |
 
-*注：此标签页中的 "添加"、"删除" 等按钮是局部变量，与电影管理标签页类似。*
+*注：此标签页中的 "添加指定"、"添加随机"、"删除选中"、"批量删除"、"清空所有" 等按钮是在 `init_content_tab` 方法内部创建的局部变量，没有被赋给 `self`。它们的点击事件直接连接到了对应的处理函数。*
 
 ---
 
@@ -83,17 +83,29 @@
 
 ---
 
-## 5. 数据库管理标签页 (`init_database_tab`)
+## 5. 操作设置标签页 (`init_operation_tab`)
+
+| 组件描述 | 变量名 |
+| --- | --- |
+| 操作设置描述标签 | 局部变量 (待实现) |
+
+---
+
+## 6. 数据库管理标签页 (`init_database_tab`)
 
 | 组件描述 | 变量名 |
 | --- | --- |
 | 左侧数据库表列表 | `self.database_table` |
 | 右侧数据详情表格 | `self.data_detail_table` |
 | "刷新数据" 按钮 | `self.db_refresh_button` |
+| 表选择下拉框 | `self.table_selector` |
+| "添加" 按钮 | `self.db_add_button` |
+| "编辑" 按钮 | `self.db_edit_button` |
+| "删除" 按钮 | `self.db_delete_button` |
 
 ---
 
-## 6. 程序设置标签页 (`init_settings_tab`)
+## 7. 程序设置标签页 (`init_settings_tab`)
 
 | 组件描述 | 变量名 |
 | --- | --- |

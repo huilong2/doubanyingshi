@@ -13,6 +13,13 @@ def submit_movie_rating(cookie, movie_id, rating, interest, user_agent, comment,
         comment: 评论内容
         proxy: 代理服务器，可选，格式如'http://ip:port'
     """
+    print(f"\n=== 开始提交评分和评论 ===")
+    print(f"电影ID: {movie_id}")
+    print(f"评分: {rating}")
+    print(f"兴趣类型: {interest}")
+    print(f"评论内容: {'有评论' if comment else '无评论'}")
+    print(f"是否使用代理: {'是' if proxy else '否'}")
+    
     # 构建请求URL
     url = f"https://movie.douban.com/j/subject/{movie_id}/interest"
     
@@ -27,7 +34,10 @@ def submit_movie_rating(cookie, movie_id, rating, interest, user_agent, comment,
             break
     
     if not ck:
+        print("错误: 未从cookie中找到ck值")
         raise ValueError("未从cookie中找到ck值")
+    
+    print(f"已从cookie中提取ck值: {'已获取' if ck else '未获取'}")
     
     # 构建请求头
     headers = {
@@ -71,6 +81,7 @@ def submit_movie_rating(cookie, movie_id, rating, interest, user_agent, comment,
     
     try:
         # 发送POST请求
+        print("正在发送请求...")
         response = requests.post(
             url,
             headers=headers,
@@ -84,10 +95,21 @@ def submit_movie_rating(cookie, movie_id, rating, interest, user_agent, comment,
         
         # 解析JSON响应
         result = response.json()
+        print(f"请求成功，响应状态码: {response.status_code}")
+        print(f"响应结果: {result}")
+        print(f"=== 评分和评论提交完成 ===\n")
         return result
         
     except requests.exceptions.RequestException as e:
         print(f"请求发生错误: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"错误状态码: {e.response.status_code}")
+            try:
+                error_result = e.response.json()
+                print(f"错误响应内容: {error_result}")
+            except:
+                print(f"错误响应内容: {e.response.text}")
+        print(f"=== 评分和评论提交失败 ===\n")
         return None
 
  

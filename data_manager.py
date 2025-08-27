@@ -76,7 +76,20 @@ class DataManager:
             proxy TEXT,
             running_status TEXT,
             note TEXT,
-            gouxuan INTEGER DEFAULT 0
+            gouxuan INTEGER DEFAULT 0,
+            zhiwenshuju TEXT
+        )
+        '''),
+        
+        # 创建指纹数据表
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS fingerprints (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_id INTEGER,
+            fingerprint_data TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
         )
         ''')
         
@@ -143,15 +156,18 @@ class DataManager:
         
         # 默认分组逻辑已删除
         
-        # 检查并添加gouxuan字段到accounts表（如果不存在）
+        # 检查并添加缺失的字段到accounts表
         try:
             cursor.execute("PRAGMA table_info(accounts)")
             columns = [column[1] for column in cursor.fetchall()]
             if 'gouxuan' not in columns:
                 cursor.execute('ALTER TABLE accounts ADD COLUMN gouxuan INTEGER DEFAULT 0')
                 logger.info("成功添加gouxuan字段到accounts表")
+            if 'zhiwenshuju' not in columns:
+                cursor.execute('ALTER TABLE accounts ADD COLUMN zhiwenshuju TEXT')
+                logger.info("成功添加zhiwenshuju字段到accounts表")
         except Exception as e:
-            logger.warning(f"添加gouxuan字段时出现警告: {str(e)}")
+            logger.warning(f"添加字段时出现警告: {str(e)}")
         
         conn.commit()
         conn.close()
@@ -307,15 +323,24 @@ class DataManager:
     def add_account(self, account_data):
         """添加账号"""
         try:
+            # 在方法内部导入以避免循环导入
+            from liulanqimokuai.fingerprint_manager import FingerprintGenerator
+            
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
+                
+                # 生成指纹数据
+                fingerprint_generator = FingerprintGenerator()
+                fingerprint_data = fingerprint_generator.generate_random_fingerprint()
+                fingerprint_json = json.dumps(fingerprint_data)
+                
                 # 按照表结构顺序插入数据
                 cursor.execute('''
                     INSERT INTO accounts (
                         username, password, ck, nickname, account_id,
                         login_status, homepage, login_time, proxy,
-                        running_status, note
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        running_status, note, gouxuan, zhiwenshuju
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     account_data['username'],
                     account_data['password'],
@@ -327,7 +352,9 @@ class DataManager:
                     account_data['login_time'],
                     account_data['proxy'],
                     account_data['running_status'],
-                    account_data['note']
+                    account_data['note'],
+                    0,  # 默认不勾选
+                    fingerprint_json  # 保存指纹数据
                 ))
                 conn.commit()
                 return True
@@ -405,6 +432,100 @@ class DataManager:
         conn.commit()
         conn.close()
         return affected > 0
+    
+    # ==================== 账号指纹字段管理方法 ====================
+    
+    def update_account_zhiwen(self, account_id, fingerprint_data):
+        """更新账号的指纹数据字段"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    'UPDATE accounts SET zhiwenshuju = ? WHERE id = ?', 
+                    (json.dumps(fingerprint_data), account_id)
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"更新账号指纹数据字段失败: {str(e)}")
+            return False
+    
+    # ==================== 指纹数据管理方法 ====================
+    
+    def save_fingerprint(self, account_id, fingerprint_data):
+        """保存账号的指纹数据到数据库，并更新账号表中的指纹数据字段"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                # 检查是否已存在该账号的指纹数据
+                cursor.execute('SELECT id FROM fingerprints WHERE account_id = ?', (account_id,))
+                result = cursor.fetchone()
+                
+                fingerprint_json = json.dumps(fingerprint_data)
+                
+                if result:
+                    # 更新现有指纹数据
+                    cursor.execute('''
+                    UPDATE fingerprints 
+                    SET fingerprint_data = ?, updated_at = CURRENT_TIMESTAMP 
+                    WHERE id = ?
+                    ''', (fingerprint_json, result[0]))
+                else:
+                    # 插入新指纹数据
+                    cursor.execute('''
+                    INSERT INTO fingerprints (account_id, fingerprint_data)
+                    VALUES (?, ?)
+                    ''', (account_id, fingerprint_json))
+                
+                # 同时更新accounts表中的zhiwenshuju字段
+                cursor.execute(
+                    'UPDATE accounts SET zhiwenshuju = ? WHERE id = ?', 
+                    (fingerprint_json, account_id)
+                )
+                
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"保存指纹数据失败: {str(e)}")
+            return False
+    
+    def load_fingerprint(self, account_id):
+        """从数据库加载账号的指纹数据"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    'SELECT fingerprint_data FROM fingerprints WHERE account_id = ?', 
+                    (account_id,)
+                )
+                result = cursor.fetchone()
+                if result:
+                    return json.loads(result[0])
+                return None
+        except Exception as e:
+            logger.error(f"加载指纹数据失败: {str(e)}")
+            return None
+    
+    def get_account_id_by_cache_dir(self, account_cache_dir):
+        """通过账号缓存目录获取账号ID"""
+        # 假设缓存目录名包含账号信息，这里需要根据实际情况调整逻辑
+        # 简单处理：从缓存路径中提取用户名部分
+        import os
+        username = os.path.basename(account_cache_dir)
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    'SELECT id FROM accounts WHERE username = ?', 
+                    (username,)
+                )
+                result = cursor.fetchone()
+                if result:
+                    return result[0]
+                return None
+        except Exception as e:
+            logger.error(f"获取账号ID失败: {str(e)}")
+            return None
     
     # ==================== 电影数据管理方法 ====================
     

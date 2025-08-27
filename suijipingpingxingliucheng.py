@@ -1,8 +1,8 @@
-from data_manager import DataManager
 import random
 import time
 import json
 from qitagongju.qita import 获取ai短语
+from data_manager import DataManager
 
 # 从 peizhi.json 加载设置
 def get_status(status_str):
@@ -16,6 +16,7 @@ def get_status(status_str):
         return None
 
 
+# 加载配置并赋值给全局变量
 def load_settings():
     try:
         with open('data/peizhi.json', 'r', encoding='utf-8') as f:
@@ -28,12 +29,13 @@ def load_settings():
         print("错误: 'data/peizhi.json' 文件格式不正确。")
         return {}
 
-# 加载配置并赋值给全局变量
+# 加载配置
 config = load_settings()
 rating_min = int(config.get('rating_min', 1))
 rating_max = int(config.get('rating_max', 3))
 operation_interval_min = int(config.get('operation_interval_min', 3))
 operation_interval_max = int(config.get('operation_interval_max', 5))
+
 
 # 初始化rating_type下拉框
 # 注意：此处仅为示例，实际应用中应根据GUI框架进行初始化
@@ -41,18 +43,20 @@ operation_interval_max = int(config.get('operation_interval_max', 5))
 rating_type = None
 
 
-def 随机获取一个数据(table_name): 
+# 随机获取一个数据
+def 随机获取一个数据(table_name):
     # 初始化DataManager
     data_manager = DataManager('data')
-    table_data = data_manager.get_table_data(table_name)   
+    table_data = data_manager.get_table_data(table_name)
     # 如果没有数据，返回None
     if not table_data:
-        return None    
+        return None
     # 随机选择一条完整数据并返回
-    random_record = random.choice(table_data)    
+    random_record = random.choice(table_data)
     return random_record
 
 
+# 随机打星_电影电视音乐读书
 def 随机打星_电影电视音乐读书(window):
     # 初始化DataManager
     data_manager = DataManager('data')
@@ -90,7 +94,7 @@ def 随机打星_电影电视音乐读书(window):
     # 从数据库中随机获取一个完整记录
     shuju_shuzu = 随机获取一个数据(shujuku_biaoming)
     if shuju_shuzu:
-        print (shuju_shuzu[1], shuju_shuzu[2], shuju_shuzu[3])
+        print(shuju_shuzu[1], shuju_shuzu[2], shuju_shuzu[3])
         # 获取对应的类型名称
         rating_types = ['电影', '电视', '读书', '音乐']
         type_name = rating_types[dianying_leixing_xuhao] if 0 <= dianying_leixing_xuhao < len(rating_types) else '电影'
@@ -100,20 +104,19 @@ def 随机打星_电影电视音乐读书(window):
         print(f"表 {shujuku_biaoming} 中没有数据")
         return None, '电影', shujuku_biaoming, dianying_leixing_xuhao
     
-    print("随机打星_电影电视音乐读书")
- 
-    
+
+# 随机评论
 def 随机评论(window=None):
-    data_manager = DataManager()    
-    accounts = data_manager.get_accounts()       
+    data_manager = DataManager()
+    accounts = data_manager.get_accounts()
     # 遍历账号列表
     for account in accounts:
         # 解析账号数据
         # 根据data_manager.py中的accounts表结构，字段顺序为：
         # id, username, password, ck, nickname, account_id, login_status, homepage, 
-        # login_time, proxy, running_status, note, gouxuan
+        # login_time, proxy, running_status, note, gouxuan, zhiwenshuju
         account_id, username, password, ck, nickname, account_db_id, login_status, homepage, \
-        login_time, proxy, running_status, note, gouxuan = account
+        login_time, proxy, running_status, note, gouxuan, zhiwenshuju = account
         
         # 检查账号是否勾选
         if gouxuan == 1:  # 账号已勾选
@@ -127,6 +130,7 @@ def 随机评论(window=None):
     
     print("随机评论流程执行完成")
 
+# 执行随机评论操作
 def 执行随机评论操作(username, account, window):
     print(f"  为账号 {username} 执行随机评论操作")
     suijipingxingjige = random.randint(rating_min, rating_max)
@@ -138,9 +142,9 @@ def 执行随机评论操作(username, account, window):
         shuju_shuzu, type_name, shujuku_biaoming, dianying_leixing_xuhao = 随机打星_电影电视音乐读书(window)
         if shuju_shuzu is None:
             print(f"警告: 未能获取到{type_name}数据，跳过本次评星")
-            continue    
+            continue
         else:
-         # 当有数据时，执行后续步骤
+        # 当有数据时，执行后续步骤
             print(f"成功获取{type_name}数据，开始处理...")
             import douban_xieyi  
             # 从配置读取评星列表与状态
@@ -152,7 +156,8 @@ def 执行随机评论操作(username, account, window):
             interest = get_status(run_status)
             if dianying_leixing_xuhao == 0 or dianying_leixing_xuhao == 1:
                 print(f"选择的类型: {type_name}")
-                baifenbi_text = window.percentage_label.text() if hasattr(window.percentage_label, 'text') else ''
+                # 先检查window是否有random_comment_percentage属性，再检查它是否有text方法
+                baifenbi_text = window.random_comment_percentage.text() if hasattr(window, 'random_comment_percentage') and hasattr(window.random_comment_percentage, 'text') else ''
                 print(f"百分比文本: {baifenbi_text}")
                 random_number = random.randint(1, 100)
                 print(f"随机数: {random_number}")
@@ -174,9 +179,25 @@ def 执行随机评论操作(username, account, window):
             movie_id = shuju_shuzu[1]
             # 从account中获取cookie（根据之前的代码结构，cookie在第4个位置，索引为3）
             cookie = account[3] if len(account) > 3 else ''
-            # 尝试从window获取user_agent，如果不可用则使用默认值
-            user_agent = window.user_agent if hasattr(window, 'user_agent') else 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
             
+            # 尝试从账号的指纹数据中获取user_agent
+            user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'  # 默认值
+            if len(account) > 12 and account[12]:  # 检查是否有指纹数据（索引为12的字段）
+                try:
+                    # 解析指纹数据JSON
+                    fingerprint_data = json.loads(account[12])
+                    # 提取user_agent
+                    if 'user_agent' in fingerprint_data:
+                        user_agent = fingerprint_data['user_agent']
+                except (json.JSONDecodeError, TypeError):
+                    # 如果解析失败，继续使用默认值
+                    pass
+            # 如果指纹数据中没有user_agent或解析失败，尝试从window获取
+            elif hasattr(window, 'user_agent'):
+                user_agent = window.user_agent
+                print(f"从window获取到的user_agent: {user_agent}")
+            else:
+                print(f"警告: 账号 {username} 没有在指纹数据中找到user_agent，也没有在window中获取到")
             douban_xieyi.submit_movie_rating(
                 cookie=cookie,
                 movie_id=movie_id,
@@ -187,13 +208,5 @@ def 执行随机评论操作(username, account, window):
                 proxy=account[9],
                 verify=False
             )
-
-# 随机评论（）    # 这行代码已注释，避免语法错误
-
-
-
-
-
-
 
 # 生成 rating_min 到 rating_max 之间的随机整数（包含两端值）
