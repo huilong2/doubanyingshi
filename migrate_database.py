@@ -17,7 +17,7 @@ def migrate_data():
     dest_db_path = DATA_DIR / "accounts.db"
 
     if not source_db_path.exists():
-        print(f"源数据库 {source_db_path} 不存在，无需迁移。")
+        print(f"源数据库 {source_db_path} 不存在，无需迁移！")
         return
 
     print(f"开始从 {source_db_path} 迁移数据到 {dest_db_path}")
