@@ -72,8 +72,6 @@
 | 随机百分比评论 | `self.random_comment_percentage` |
 | 评星星级输入框 | `self.star_rating` |
 | 评星类型下拉框 | `self.rating_type` |
-| **输入内容** | |
-| 内容输入文本框 | `self.content_text` |
 | **运行设置** | |
 | "开始" 按钮 | `self.run_start_btn` |
 | 运行模式下拉框 | `self.run_mode_combo` |

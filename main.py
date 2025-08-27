@@ -19,7 +19,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QAbstractItemView, QSizePolicy
 from data_manager import DataManager
 
-from pathlib import Path
+from pathlib import Path    
 from mokuai_chagyong import chagyong_load_config, chagyong_save_config
 from liulanqi_gongcaozuo import LiulanqiGongcaozuo, LiulanqiPeizhi
 from renwuliucheng import RenwuLiucheng
@@ -522,9 +522,10 @@ class AccountManagerWindow(QMainWindow):
         # 左侧布局：功能选择和输入内容
         # 创建复选框组
         checkbox_group = QGroupBox("功能选择")
-        checkbox_group.setMinimumWidth(260)  # 设置最小宽度
-        checkbox_layout = QVBoxLayout(checkbox_group)
-        checkbox_layout.setSpacing(10)
+        checkbox_group.setMinimumWidth(400)  # 增加宽度以适应水平排列
+        checkbox_layout = QHBoxLayout(checkbox_group)  # 改为水平布局
+        checkbox_layout.setSpacing(20)  # 设置复选框之间的间距
+        checkbox_layout.setContentsMargins(10, 10, 10, 10)  # 设置内边距
         
         # 创建复选框
         self.signature_checkbox = QCheckBox("签名")
@@ -538,10 +539,12 @@ class AccountManagerWindow(QMainWindow):
         self.group_checkbox.stateChanged.connect(self.save_settings)
         self.phrase_checkbox.stateChanged.connect(self.save_settings)
         
-        # 添加复选框
-        for checkbox in [self.signature_checkbox, self.status_checkbox, 
-                        self.group_checkbox, self.phrase_checkbox]:
-            checkbox_layout.addWidget(checkbox)
+        # 添加复选框到水平布局
+        checkbox_layout.addWidget(self.signature_checkbox)
+        checkbox_layout.addWidget(self.status_checkbox)
+        checkbox_layout.addWidget(self.group_checkbox)
+        checkbox_layout.addWidget(self.phrase_checkbox)
+        checkbox_layout.addStretch()  # 添加伸缩项使复选框靠左对齐
         
         left_layout.addWidget(checkbox_group)
         
@@ -595,11 +598,30 @@ class AccountManagerWindow(QMainWindow):
         rating_layout = QVBoxLayout(rating_group)
         rating_layout.setSpacing(15)
         
-        # 评论后随机评星
-        rating_range_layout = QHBoxLayout()
-        rating_range_layout.setSpacing(10)
+        # 随机百分比评论和评论后随机评星（合并到一行）
+        combined_layout = QHBoxLayout()
+        combined_layout.setSpacing(20)  # 设置组件间的间距
+        
+        # 随机百分比评论部分
+        percentage_label = QLabel("随机百分比评论：")
+        combined_layout.addWidget(percentage_label)
+        
+        self.random_comment_percentage = QLineEdit("100")
+        self.random_comment_percentage.setFixedWidth(60)
+        self.random_comment_percentage.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 为文本框添加失去焦点事件处理
+        self.random_comment_percentage.editingFinished.connect(self.save_settings)
+        
+        combined_layout.addWidget(self.random_comment_percentage)
+        combined_layout.addWidget(QLabel("%"))
+        
+        # 分隔空间
+        combined_layout.addSpacing(30)
+        
+        # 评论后随机评星部分
         rating_label = QLabel("评论后随机评星：")
-        rating_range_layout.addWidget(rating_label)
+        combined_layout.addWidget(rating_label)
         
         self.rating_min = QLineEdit("1")
         self.rating_max = QLineEdit("2")
@@ -611,29 +633,15 @@ class AccountManagerWindow(QMainWindow):
         self.rating_min.editingFinished.connect(self.save_settings)
         self.rating_max.editingFinished.connect(self.save_settings)
         
-        rating_range_layout.addWidget(self.rating_min)
-        rating_range_layout.addWidget(QLabel("-"))
-        rating_range_layout.addWidget(self.rating_max)
-        rating_range_layout.addStretch()
-        rating_layout.addLayout(rating_range_layout)
+        combined_layout.addWidget(self.rating_min)
+        combined_layout.addWidget(QLabel("-"))
+        combined_layout.addWidget(self.rating_max)
         
-        # 随机百分比评论
-        random_percentage_layout = QHBoxLayout()
-        random_percentage_layout.setSpacing(10)
-        percentage_label = QLabel("随机百分比评论：")
-        random_percentage_layout.addWidget(percentage_label)
+        # 添加伸缩项使组件靠左对齐
+        combined_layout.addStretch()
         
-        self.random_comment_percentage = QLineEdit("100")
-        self.random_comment_percentage.setFixedWidth(60)
-        self.random_comment_percentage.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        # 为文本框添加失去焦点事件处理
-        self.random_comment_percentage.editingFinished.connect(self.save_settings)
-        
-        random_percentage_layout.addWidget(self.random_comment_percentage)
-        random_percentage_layout.addWidget(QLabel("%"))
-        random_percentage_layout.addStretch()
-        rating_layout.addLayout(random_percentage_layout)
+        # 添加到评星设置布局
+        rating_layout.addLayout(combined_layout)
         
         # 评星的打几星
         star_rating_layout = QHBoxLayout()
@@ -663,21 +671,6 @@ class AccountManagerWindow(QMainWindow):
         rating_layout.addLayout(star_rating_layout)
         
         right_layout.addWidget(rating_group)
-        
-        # 创建文本框
-        text_group = QGroupBox("输入内容")
-        text_layout = QVBoxLayout(text_group)
-        
-        self.content_text = QTextEdit()
-        self.content_text.setPlaceholderText("请输入内容（支持换行）")
-        self.content_text.setMinimumHeight(200)  # 设置最小高度
-        
-        # 为文本框添加失去焦点事件处理
-        self.content_text.textChanged.connect(self.save_settings)
-        
-        text_layout.addWidget(self.content_text)
-        
-        right_layout.addWidget(text_group)
         right_layout.addStretch()
         
         # 运行设置组

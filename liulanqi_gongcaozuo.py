@@ -16,8 +16,8 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'liulanqimokuai'))
 
-from browser_core import BrowserController
-from mokuai_ipdingwei import get_ip_location
+from liulanqimokuai.browser_core import BrowserController
+from liulanqimokuai.mokuai_ipdingwei import get_ip_location
 
 # 导入全局变量
 from bianlian_dingyi import DOUBAN_URL, DEFAULT_BROWSER_TIMEOUT, DEFAULT_PAGE_TIMEOUT
@@ -406,23 +406,44 @@ class LiulanqiGongcaozuo:
     async def _wait_for_douban_page_ready(self, timeout: int = DEFAULT_BROWSER_TIMEOUT):
         """智能等待豆瓣页面准备就绪"""
         try:
+            # 首先检查浏览器和页面状态
+            if not self.controller or not self.controller.browser or not self.controller.page:
+                logger.warning("浏览器或页面不可用，无法等待页面就绪")
+                return
+            
+            if not self.controller.browser.is_connected():
+                logger.warning("浏览器已断开连接，无法等待页面就绪")
+                return
+                
+            if self.controller.page.is_closed():
+                logger.warning("页面已关闭，无法等待页面就绪")
+                return
+            
             # 等待页面基本加载完成
-            await self.controller.page.wait_for_load_state('domcontentloaded', timeout=timeout * 1000)
+            try:
+                await self.controller.page.wait_for_load_state('domcontentloaded', timeout=timeout * 1000)
+            except Exception as e:
+                logger.warning(f"等待页面加载完成时出错: {e}")
+                return
             
             # 等待关键元素出现（登录按钮或用户信息）
             try:
                 # 尝试等待登录按钮（未登录状态）
                 await self.controller.page.wait_for_selector('.nav-login', timeout=DEFAULT_PAGE_TIMEOUT)
                 logger.info("检测到未登录状态")
-            except:
+            except Exception as nav_err:
                 try:
                     # 尝试等待用户信息（已登录状态）
                     await self.controller.page.wait_for_selector('.nav-user-account, .user-info', timeout=DEFAULT_PAGE_TIMEOUT)
                     logger.info("检测到已登录状态")
-                except:
+                except Exception as user_err:
                     # 如果都找不到，至少等待body元素
-                    await self.controller.page.wait_for_selector('body', timeout=2000)
-                    logger.info("页面基本加载完成")
+                    try:
+                        await self.controller.page.wait_for_selector('body', timeout=2000)
+                        logger.info("页面基本加载完成")
+                    except Exception as e:
+                        logger.warning(f"等待基本页面元素时出错: {e}")
+                        return
             
         except Exception as e:
             logger.warning(f"等待页面元素超时，继续执行: {e}")
