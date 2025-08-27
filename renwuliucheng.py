@@ -286,10 +286,17 @@ class RenwuLiucheng:
                         'id': user_info.get('id')
                     }
                     
+                    # 根据登录状态决定是否更新cookie
+                    # 如果已登录，保留现有cookie；如果未登录，将cookie设置为空字符串
+                    cookie_value = account[3] if user_info.get('login_status') == '已登录' else ''
+                    
                     # 使用工具类创建标准化的账号数据
                     account_data = DoubanUtils.create_account_data(
-                        account, user_info_for_db, account[3], '运行中'
+                        account, user_info_for_db, cookie_value, '运行中'
                     )
+                    
+                    # 明确设置登录状态
+                    account_data['login_status'] = user_info.get('login_status', '未知')
                     
                     # 更新数据库
                     self.db_manager.update_account(account[0], account_data)

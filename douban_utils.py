@@ -80,7 +80,7 @@ class DoubanUtils:
         return {
             'username': account[1],
             'password': account[2],
-            'ck': cookie_str or account[3],
+            'ck': cookie_str if cookie_str is not None else account[3],
             'nickname': user_info.get('name', account[4]) if user_info else account[4],
             'account_id': user_info.get('id', account[5]) if user_info else account[5],
             'login_status': user_info.get('login_status', '未登录') if user_info else account[6],

@@ -165,6 +165,37 @@ async def panduan_zhanghaoshifoudenglu():
         else:
             print(f"❌ 账号 {username} 未登录，状态: {login_status}")
             print(f"❌ 用户信息状态: {user_login_status}")
+            
+            # 当用户未登录时，删除保存的cookie
+            try:
+                from data_manager import DataManager
+                from douban_utils import DoubanUtils
+                
+                # 创建数据管理器实例
+                db_manager = DataManager()
+                
+                # 获取账号信息
+                accounts = db_manager.get_accounts()
+                for account in accounts:
+                    if account[1] == username:
+                        # 创建账号数据，将ck字段设置为空字符串来删除cookie
+                        account_data = DoubanUtils.create_account_data(
+                            account=account,
+                            user_info=None,
+                            cookie_str="",  # 空字符串表示删除cookie
+                            running_status="未登录"
+                        )
+                        
+                        # 明确设置login_status为未登录
+                        account_data['login_status'] = '未登录'
+                        
+                        # 更新账号信息到数据库
+                        db_manager.update_account(account[0], account_data)
+                        print(f"[流程] 已删除账号 {username} 的cookie信息")
+                        break
+            except Exception as e:
+                print(f"[错误] 删除cookie过程中出错: {e}")
+            
             # 关闭浏览器
             await liucheng.guanbi_liulanqi()
             return False, None

@@ -179,18 +179,32 @@ class LiulanqiGongcaozuo:
                 self.browser_signals.info.emit(f"浏览器 {self.peizhi.zhanghao} 已关闭")
                 self.browser_signals.account_closed.emit(self.peizhi.zhanghao)
 
-    def _update_account_status(self, status):
-        """更新数据库中的账号状态"""
+    def _update_account_status(self, status, keep_cookie=True):
+        """更新数据库中的账号状态
+        
+        Args:
+            status: 新的运行状态
+            keep_cookie: 是否保留现有的cookie值
+        """
         try:
             if self.db_manager:
                 accounts = self.db_manager.get_accounts()
                 for account in accounts:
                     if account[1] == self.peizhi.zhanghao:
+                        # 如果不保留cookie，或者账号状态为未登录，则将cookie设置为空字符串
+                        # 这里通过账号状态列(account[6])判断登录状态
+                        login_status = account[6] if len(account) > 6 else "未知"
+                        cookie_value = account[3] if (keep_cookie and login_status != "未登录") else ""
+                        
                         # 使用工具类创建标准化的账号数据
                         from douban_utils import DoubanUtils
                         account_data = DoubanUtils.create_account_data(
-                            account, None, account[3], status
+                            account, None, cookie_value, status
                         )
+                        
+                        # 确保登录状态正确更新
+                        account_data['login_status'] = login_status
+                        
                         self.db_manager.update_account(account[0], account_data)
                         break
         except Exception as e:
@@ -509,28 +523,35 @@ class LiulanqiGongcaozuo:
     def _update_douban_account_info(self, user_info: Dict[str, Any], login_status: str):
         """更新豆瓣账号信息到数据库"""
         try:
-            # 获取Cookie字符串（使用同步方式调用异步方法）
-            import asyncio
-            cookie_str = ""
-            try:
-                if self.controller and hasattr(self.controller, '_loop'):
-                    future = asyncio.run_coroutine_threadsafe(self._get_cookie_string(), self.controller._loop)
-                    cookie_str = future.result(timeout=5)  # 5秒超时
-                    print(f"[调试] 获取到的Cookie: {cookie_str[:30]}...")  # 调试信息
-            except Exception as e:
-                self.log_event("警告", f"获取Cookie时出错: {str(e)}")
-                print(f"[错误] 获取Cookie失败: {str(e)}")  # 调试信息
-                
             if self.db_manager:
                 accounts = self.db_manager.get_accounts()
                 for account in accounts:
                     if account[1] == self.peizhi.zhanghao:
+                        # 根据登录状态决定是否获取和更新cookie
+                        cookie_str = account[3]  # 默认使用现有cookie值
+                        
+                        if login_status == "已登录":
+                            # 只有当用户已登录时才获取cookie
+                            try:
+                                # 获取Cookie字符串（使用同步方式调用异步方法）
+                                import asyncio
+                                if self.controller and hasattr(self.controller, '_loop'):
+                                    future = asyncio.run_coroutine_threadsafe(self._get_cookie_string(), self.controller._loop)
+                                    cookie_str = future.result(timeout=5)  # 5秒超时
+                                    print(f"[调试] 获取到的Cookie: {cookie_str[:30]}...")  # 调试信息
+                            except Exception as e:
+                                self.log_event("警告", f"获取Cookie时出错: {str(e)}")
+                                print(f"[错误] 获取Cookie失败: {str(e)}")  # 调试信息
+                                # 出错时保留现有cookie值
+                        else:
+                            # 未登录时，将cookie设置为空字符串
+                            cookie_str = ""
+                        
                         # 创建用户信息字典用于数据库更新
                         user_info_for_db = {
                             'login_status': login_status,
                             'name': user_info.get('name'),
-                            'id': user_info.get('id'),
-                            'ck': cookie_str  # 添加Cookie信息
+                            'id': user_info.get('id')
                         }
                         
                         # 使用DoubanUtils创建标准的账号数据（使用正确的account对象）
@@ -543,8 +564,13 @@ class LiulanqiGongcaozuo:
                         
                         # 更新账号信息到数据库（使用正确的参数格式）
                         self.db_manager.update_account(account[0], account_data)
-                        self.log_event("信息", f"已更新账号信息: {account_data.get('username', '未知')}，Cookie已保存")
-                        print(f"[调试] 已保存Cookie到账号 {account[0]}")  # 调试信息
+                        
+                        if login_status == "已登录":
+                            self.log_event("信息", f"已更新账号信息: {account_data.get('username', '未知')}，Cookie已保存")
+                            print(f"[调试] 已保存Cookie到账号 {account[0]}")  # 调试信息
+                        else:
+                            self.log_event("信息", f"已更新账号信息: {account_data.get('username', '未知')}，未登录状态已处理")
+                            print(f"[调试] 账号 {account[0]} 未登录，已清空Cookie")  # 调试信息
                         break
         except Exception as e:
             self.log_event("错误", f"更新账号信息失败: {str(e)}")
