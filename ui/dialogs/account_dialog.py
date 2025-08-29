@@ -125,13 +125,24 @@ class AccountDialog(BaseDialog):
     
     def show_fingerprint_data(self):
         """显示指纹数据"""
-        username = self.username_edit.text().strip()
-        if not username:
-            QMessageBox.warning(self, "提示", "请先输入用户名")
+        # 获取账号ID（如果存在）
+        account_id = None
+        if hasattr(self, 'original_data') and self.original_data:
+            # 使用账号的id字段而不是account_id字段
+            account_id = self.original_data.get('id')
+            # 确保account_id是整数类型
+            if account_id is not None:
+                try:
+                    account_id = int(account_id)
+                except (ValueError, TypeError):
+                    account_id = None
+        
+        if account_id is None:
+            QMessageBox.warning(self, "提示", "账号ID无效")
             return
         
         try:
-            show_fingerprint_dialog(self, username)
+            show_fingerprint_dialog(self, account_id)
         except Exception as e:
             QMessageBox.critical(self, "错误", f"显示指纹数据失败: {str(e)}")
     

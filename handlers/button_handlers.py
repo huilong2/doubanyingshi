@@ -37,7 +37,7 @@ def ask_yes_no(parent, title, text):
     return QMessageBox.StandardButton.Yes if box.clickedButton() == yes_btn else QMessageBox.StandardButton.No
 
 def add_account_handler(window):
-    """添加账号处理函数"""
+    """添加账号处理函数 - 精简版"""
     from ui.dialogs import AccountDialog
     dialog = AccountDialog(window)
     dialog.setWindowTitle("添加账号")
@@ -46,40 +46,17 @@ def add_account_handler(window):
         account_data = dialog.get_data()
         if account_data:
             # 检查用户名是否已存在
-            existing_accounts = window.data_manager.get_accounts()
-            if any(account[1] == account_data['username'] for account in existing_accounts):
+            if any(account[1] == account_data['username'] for account in window.data_manager.get_accounts()):
                 QMessageBox.warning(window, "警告", f"用户名 {account_data['username']} 已存在")
                 return
             
-            # 生成指纹
-            try:
-                from utils import ensure_account_fingerprint
-                fingerprint = ensure_account_fingerprint(account_data['username'])
-                if fingerprint:
-                    account_data['fingerprint'] = fingerprint
-                else:
-                    raise Exception("指纹生成失败")
-            except Exception as e:
-                logger.error(f"生成指纹失败: {str(e)}")
-                QMessageBox.warning(window, "警告", "指纹生成失败")
-                return
-            
-            # 保存账号
+            # 保存账号（data_manager.add_account内部已处理指纹生成和保存）
             if window.data_manager.add_account(account_data):
-                # 保存指纹数据到账号目录
-                try:
-                    username = account_data['username']
-                    from utils import save_account_fingerprint
-                    
-                    if save_account_fingerprint(username, fingerprint):
-                        logger.info(f"已为账号 {username} 生成并保存指纹数据")
-                    else:
-                        logger.error(f"保存账号 {username} 指纹数据失败")
-                except Exception as e:
-                    logger.error(f"保存指纹数据失败: {str(e)}")
+                logger.info(f"账号 {account_data['username']} 添加成功")
                 window.load_accounts()
                 QMessageBox.information(window, "成功", "账号添加成功")
             else:
+                logger.error("账号添加失败")
                 QMessageBox.warning(window, "失败", "账号添加失败")
 
 def edit_account_handler(window):
@@ -106,6 +83,7 @@ def edit_account_handler(window):
     
     from ui.dialogs import AccountDialog
     dialog = AccountDialog(window, {
+        'id': account_info[0],
         'username': account_info[1],
         'password': account_info[2],
         'ck': account_info[3],
@@ -126,83 +104,80 @@ def edit_account_handler(window):
                 QMessageBox.warning(window, "失败", "账号更新失败")
 
 def delete_account_handler(window):
-    """删除账号处理函数"""
-    # logger.debug("[删除账号] 点击删除账号按钮")
+    """删除账号处理函数 - 精简版"""
     # 获取所有勾选的账号行
-    selected_rows = set()
-    for row in range(window.account_table.rowCount()):
-        checkbox_item = window.account_table.item(row, 0)
-        if checkbox_item and checkbox_item.checkState() == Qt.CheckState.Checked:
-            selected_rows.add(row)
-    # logger.debug(f"[删除账号] 勾选的行数: {len(selected_rows)}")
+    selected_rows = [row for row in range(window.account_table.rowCount()) 
+                    if window.account_table.item(row, 0) and 
+                    window.account_table.item(row, 0).checkState() == Qt.CheckState.Checked]
     
     if not selected_rows:
         QMessageBox.warning(window, "警告", "请先勾选要删除的账号")
         return
     
-    # 预览将要删除的用户名
-    try:
-        preview_usernames = []
-        for row in sorted(selected_rows):
-            item = window.account_table.item(row, 1)
-            preview_usernames.append(item.text() if item else "<空>")
-        # logger.debug(f"[删除账号] 即将删除的用户名: {preview_usernames}")
-    except Exception as e:
-        logger.warning(f"[删除账号] 预览用户名失败: {str(e)}")
-    
     # 确认删除
-    reply = ask_yes_no(window, "确认删除", f"确定要删除选中的 {len(selected_rows)} 个账号吗？\n此操作不可恢复！")
-    # logger.debug(f"[删除账号] 用户确认结果: {reply}")
+    if ask_yes_no(window, "确认删除", f"确定要删除选中的 {len(selected_rows)} 个账号吗？\n此操作不可恢复！") != QMessageBox.StandardButton.Yes:
+        return
     
-    if reply == QMessageBox.StandardButton.Yes:
-        deleted_count = 0
-        for row in sorted(selected_rows, reverse=True):
+    deleted_count = 0
+    for row in sorted(selected_rows, reverse=True):
+        try:
+            # 获取用户名
+            username = window.account_table.item(row, 1).text()
+            
+            # 通过数据库获取账号ID
+            account_id = None
+            for account in window.data_manager.get_accounts():
+                if account[1] == username:
+                    account_id = account[0]  # 获取账号ID
+                    break
+            
+            if not account_id:
+                logger.warning(f"未在数据库中找到用户名: {username}")
+                continue
+            
+            # 1. 先删除浏览器缓存目录
             try:
-                # 获取账号信息 - 用户名在第1列（索引1）
-                username = window.account_table.item(row, 1).text()  # 用户名列
-                # logger.debug(f"[删除账号] 处理行 row={row} username={username}")
-                accounts = window.data_manager.get_accounts()
-                account_info = None
-                for account in accounts:
-                    if account[1] == username:
-                        account_info = account
-                        break
+                from config import config
+                import os, shutil, json
                 
-                if account_info:
-                    # logger.debug(f"准备删除账号 id={account_info[0]} username={username}")
-                    # 删除账号数据
-                    if window.data_manager.delete_account(account_info[0]):
-                        deleted_count += 1
-                        # logger.debug(f"账号删除成功 id={account_info[0]} username={username}")
-                        
-                        # 删除账号相关的缓存文件和目录
-                        try:
-                            from utils import delete_account_cache
-                            
-                            # 删除浏览器缓存目录
-                            if delete_account_cache(username):
-                                pass
-                            else:
-                                logger.warning(f"删除账号 {username} 缓存目录失败")
-                                
-                        except Exception as e:
-                            logger.error(f"删除账号缓存文件失败: {str(e)}")
-                    else:
-                        logger.warning(f"账号删除失败或未找到记录 id={account_info[0]} username={username}")
-                else:
-                    logger.warning(f"[删除账号] 未在数据库中找到用户名: {username}")
+                # 获取浏览器缓存路径
+                config_path = config.get_config_path()
+                browser_cache_path = ""
                 
+                if os.path.exists(config_path):
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        browser_cache_path = json.load(f).get('browser_cache_path', '')
+                
+                # 使用默认路径或配置路径
+                browser_cache_path = browser_cache_path or os.path.join(config.program_root, 'temp', 'browser_cache')
+                browser_cache_path = browser_cache_path.replace('/', '\\')
+                
+                # 构建并删除账号缓存目录
+                account_cache_dir = os.path.join(browser_cache_path, username)
+                if os.path.exists(account_cache_dir):
+                    shutil.rmtree(account_cache_dir)
             except Exception as e:
-                logger.error(f"删除账号时出错: {str(e)}")
-        
-        # 刷新账号列表
-        window.load_accounts()
-        logger.info(f"[删除账号] 删除完成，实际删除数量: {deleted_count}")
-        
-        if deleted_count > 0:
-            QMessageBox.information(window, "成功", f"已成功删除 {deleted_count} 个账号")
-        else:
-            QMessageBox.warning(window, "失败", "删除账号失败，请查看控制台日志定位问题")
+                logger.error(f"删除账号 {username} 的缓存目录时出错: {str(e)}")
+                QMessageBox.warning(
+                    window,
+                    "缓存清理错误",
+                    f"账号 '{username}' 缓存清理失败！\n请手动删除该目录: {account_cache_dir}"
+                )
+            
+            # 2. 然后删除数据库中的账号
+            if window.data_manager.delete_account(account_id):
+                deleted_count += 1
+                logger.info(f"账号删除成功 - ID: {account_id}, 用户名: {username}")
+        except Exception as e:
+            logger.error(f"删除账号时出错: {str(e)}")
+    
+    # 刷新账号列表并显示结果
+    window.load_accounts()
+    
+    if deleted_count > 0:
+        QMessageBox.information(window, "成功", f"已成功删除 {deleted_count} 个账号")
+    else:
+        QMessageBox.warning(window, "失败", "删除账号失败，请查看控制台日志定位问题")
 
 def add_proxy_handler(window):
     """添加代理处理函数"""

@@ -114,6 +114,11 @@ class RenwuLiucheng:
             if not self.liulanqi or not self.liulanqi.controller.page:
                 return None
                 
+            # 确保页面对象仍然有效
+            if not self.liulanqi.controller.page or self.liulanqi.controller.page.is_closed():
+                logger.warning("页面已关闭，无法获取用户信息")
+                return None
+                
             # 使用统一的用户信息获取脚本
             user_info_future = self.liulanqi.controller.run_async(
                 self.liulanqi.controller.page.evaluate(DoubanUtils.get_user_info_script())

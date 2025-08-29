@@ -7,6 +7,14 @@ import stat
 import threading
 import subprocess
 import platform
+
+# 设置输出不缓冲，确保日志实时显示
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(line_buffering=True)
+else:
+    # 对于较老的Python版本，使用flush
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTableWidget, QTableWidgetItem, QMessageBox,
@@ -20,7 +28,7 @@ from PySide6.QtWidgets import QAbstractItemView, QSizePolicy
 from data_manager import DataManager
 
 from pathlib import Path    
-from mokuai_chagyong import chagyong_load_config, chagyong_save_config
+from config import load_config, save_config
 from liulanqi_gongcaozuo import LiulanqiGongcaozuo, LiulanqiPeizhi
 from renwuliucheng import RenwuLiucheng
 from liulanqimokuai.fingerprint_manager import FingerprintManager
@@ -236,10 +244,10 @@ class AccountManagerWindow(QMainWindow):
         account_layout.setContentsMargins(5, 5, 5, 5)
         
         # 账号表格表头设置
-        self.account_table.setColumnCount(12)
+        self.account_table.setColumnCount(13)
         self.account_table.setHorizontalHeaderLabels([
             "选择", "账号", "密码", "CK", "账号昵称", "账号ID", 
-            "登录状态", "主页地址", "登录时间", "代理IP", "运行状态", "备注"
+            "登录状态", "主页地址", "登录时间", "代理IP", "运行状态", "备注", "指纹数据"
         ])
         
         # 设置列宽
@@ -255,7 +263,8 @@ class AccountManagerWindow(QMainWindow):
             8: 150,  # 登录时间
             9: 120,  # 代理IP
             10: 100, # 运行状态
-            11: 80   # 备注
+            11: 80,  # 备注
+            12: 100  # 指纹数据
         }
         
         for col, width in column_widths.items():
@@ -265,6 +274,9 @@ class AccountManagerWindow(QMainWindow):
         self.account_table.setAlternatingRowColors(True)  # 交替行颜色
         self.account_table.setShowGrid(True)  # 显示网格线
         self.account_table.setGridStyle(Qt.PenStyle.SolidLine)  # 实线网格
+        
+        # 隐藏主页地址列
+        self.account_table.setColumnHidden(7, True)
         
         self.account_table.horizontalHeader().setStretchLastSection(True)
         self.account_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -893,7 +905,7 @@ class AccountManagerWindow(QMainWindow):
     def load_config(self):
         """加载配置文件"""
         try:
-            self.config = chagyong_load_config(quan_shujuwenjianjia)
+            self.config = load_config(quan_shujuwenjianjia)
             logger.info(f"已加载配置: {self.config}")
             
             # 使用 QTimer 延迟加载配置，确保 UI 组件已创建
@@ -1050,12 +1062,12 @@ class AccountManagerWindow(QMainWindow):
         self.account_table.setRowCount(len(accounts))
 
         for i, account in enumerate(accounts):
-            # account字段顺序: id, username, password, ck, nickname, account_id, login_status, homepage, login_time, proxy, running_status, note, gouxuan
+            # account字段顺序: id, username, password, ck, nickname, account_id, login_status, homepage, login_time, proxy, running_status, note, zhiwenshuju, gouxuan
             
             # 第一列添加复选框
             checkbox_item = QTableWidgetItem()
-            # 恢复之前保存的勾选状态（account[12]是gouxuan字段）
-            gouxuan_state = account[12] if len(account) > 12 else 0
+            # 恢复之前保存的勾选状态（account[13]是gouxuan字段）
+            gouxuan_state = account[13] if len(account) > 13 else 0
             checkbox_item.setCheckState(Qt.CheckState.Checked if gouxuan_state == 1 else Qt.CheckState.Unchecked)
             checkbox_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.account_table.setItem(i, 0, checkbox_item)
@@ -1072,6 +1084,10 @@ class AccountManagerWindow(QMainWindow):
             self.account_table.setItem(i, 9, QTableWidgetItem(account[9] or ''))   # 代理IP
             self.account_table.setItem(i, 10, QTableWidgetItem(account[10] or '')) # 运行状态
             self.account_table.setItem(i, 11, QTableWidgetItem(account[11] or '')) # 备注
+            
+            # 获取并显示指纹数据
+            fingerprint_text = "有指纹" if account[12] else "没有指纹"
+            self.account_table.setItem(i, 12, QTableWidgetItem(fingerprint_text))  # 指纹数据
             
             # 保存账号ID到第一列（账号列）的UserRole中
             self.account_table.item(i, 1).setData(Qt.ItemDataRole.UserRole, account[0])
@@ -1133,7 +1149,7 @@ class AccountManagerWindow(QMainWindow):
                 }
             }
             
-            if chagyong_save_config(quan_shujuwenjianjia, config):
+            if save_config(quan_shujuwenjianjia, config):
                 self.config = config  # 更新当前配置
                 logger.info(f"配置已保存: {config}")
             else:
@@ -1195,6 +1211,15 @@ class AccountManagerWindow(QMainWindow):
     def show_error(self, message):
         """在主线程中显示错误消息"""
         logger.error(message)
+        try:
+            from datetime import datetime
+            ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            print(f"[{ts}] [错误] {message}", flush=True)
+            # 强制刷新输出缓冲区
+            import sys
+            sys.stdout.flush()
+        except Exception:
+            pass
         QMessageBox.warning(self, "错误", message)
 
     def show_info(self, message):
@@ -1203,7 +1228,10 @@ class AccountManagerWindow(QMainWindow):
         try:
             from datetime import datetime
             ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            print(f"[{ts}] {message}")
+            print(f"[{ts}] {message}", flush=True)
+            # 强制刷新输出缓冲区
+            import sys
+            sys.stdout.flush()
         except Exception:
             pass
 
@@ -1262,9 +1290,28 @@ class AccountManagerWindow(QMainWindow):
             return
         
         row = selected_items[0].row()
-        username = self.account_table.item(row, 2).text()  # 用户名在第2列
-        password = self.account_table.item(row, 3).text()  # 密码在第3列
-        proxy = self.account_table.item(row, 10).text()  # 代理IP在第10列
+        username = self.account_table.item(row, 1).text()  # 用户名在第1列
+        password = self.account_table.item(row, 2).text()  # 密码在第2列
+        proxy = self.account_table.item(row, 9).text()  # 代理/提取接口在第9列
+
+        # 如有配置代理提取接口，则先获取可用代理
+        try:
+            if proxy:
+                from qitagongju.qita import huo_qu_dai_li
+                self.browser_signals.info.emit("检测到代理配置，正在获取可用代理...")
+                success, ip, location = huo_qu_dai_li(proxy)
+                if not success or not ip:
+                    self.browser_signals.error.emit("获取代理失败，已取消打开浏览器。")
+                    return
+                # 使用获取到的代理IP
+                proxy = ip
+                if location:
+                    self.browser_signals.info.emit(f"已获取代理: {ip}（{location}）")
+                else:
+                    self.browser_signals.info.emit(f"已获取代理: {ip}")
+        except Exception as e:
+            self.browser_signals.error.emit(f"获取代理时出错: {str(e)}")
+            return
 
         # 确保只允许每个账号同时打开一个浏览器实例
         if username in self.active_browser_sessions and self.active_browser_sessions[username]['thread'].is_alive():
@@ -1285,7 +1332,20 @@ class AccountManagerWindow(QMainWindow):
         
         # 检查指纹数据
         from utils import get_account_fingerprint
-        fingerprint = get_account_fingerprint(username)
+        # 获取账号ID
+        account_id = None
+        accounts = self.data_manager.get_accounts()
+        for account in accounts:
+            if account[1] == username:  # account[1]是用户名
+                account_id = account[0]  # account[0]是ID
+                break
+        
+        # 检查是否找到账号ID
+        if account_id is None:
+            self.browser_signals.error.emit(f"未找到账号 {username} 的ID")
+            return
+            
+        fingerprint = get_account_fingerprint(account_id)
         if not fingerprint:
             self.browser_signals.error.emit("该账号未保存指纹数据，请先保存指纹数据")
             return

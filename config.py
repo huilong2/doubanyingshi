@@ -6,6 +6,7 @@
 """
 
 import os
+import json
 import platform
 from pathlib import Path
 
@@ -18,6 +19,9 @@ class ProgramConfig:
         
         # 初始化目录结构
         self.init_directories()
+        
+        # 加载配置文件数据
+        self.config_data = self.load_config()
     
     def _get_program_root(self):
         """获取程序根目录，兼容exe打包后的情况"""
@@ -41,8 +45,6 @@ class ProgramConfig:
         self.logs_dir = self.program_root / "logs"
         self.logs_dir.mkdir(exist_ok=True)
         
-
-        
         # 临时文件目录
         self.temp_dir = self.program_root / "temp"
         self.temp_dir.mkdir(exist_ok=True)
@@ -63,8 +65,6 @@ class ProgramConfig:
         """获取日志文件路径"""
         return self.logs_dir / "app.log"
     
-
-    
     def get_temp_path(self):
         """获取临时文件目录路径"""
         return self.temp_dir
@@ -72,8 +72,6 @@ class ProgramConfig:
     def get_backup_path(self):
         """获取备份目录路径"""
         return self.backup_dir
-    
-
     
     def get_system_info(self):
         """获取系统信息"""
@@ -90,8 +88,8 @@ class ProgramConfig:
         system = platform.system()
         
         if system == "Windows":
-            program_files = os.environ.get('PROGRAMFILES', 'C:\\Program Files')
-            program_files_x86 = os.environ.get('PROGRAMFILES(X86)', 'C:\\Program Files (x86)')
+            program_files = os.environ.get('PROGRAMFILES', 'C:\Program Files')
+            program_files_x86 = os.environ.get('PROGRAMFILES(X86)', 'C:\Program Files (x86)')
             
             return [
                 f"{program_files}\\Google\\Chrome\\Application\\chrome.exe",
@@ -135,10 +133,31 @@ class ProgramConfig:
             'program_root': str(self.program_root),
             'data_dir': str(self.data_dir),
             'logs_dir': str(self.logs_dir),
-
             'temp_dir': str(self.temp_dir),
             'backup_dir': str(self.backup_dir)
         }
+    
+    def load_config(self):
+        """加载配置文件数据"""
+        config_path = self.get_config_path()
+        try:
+            if config_path.exists():
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception as e:
+            print(f"加载配置文件失败: {e}")
+        return {}
+    
+    def save_config(self, config_data):
+        """保存配置文件数据"""
+        config_path = self.get_config_path()
+        try:
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config_data, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception as e:
+            print(f"保存配置文件失败: {e}")
+            return False
 
 # 创建全局配置实例
 config = ProgramConfig()
@@ -149,3 +168,12 @@ DATA_DIR = config.data_dir
 LOGS_DIR = config.logs_dir
 TEMP_DIR = config.temp_dir
 BACKUP_DIR = config.backup_dir
+
+# 导出配置加载和保存函数
+def load_config(quan_shujuwenjianjia=None):
+    """加载配置文件数据"""
+    return config.load_config()
+
+def save_config(quan_shujuwenjianjia=None, config_data=None):
+    """保存配置文件数据"""
+    return config.save_config(config_data if config_data is not None else {})

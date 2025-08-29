@@ -20,8 +20,8 @@ def get_program_data_dir():
 zhanghao_xuhao = 0  # 默认从第一个账号开始
 
 # 浏览器相关
-DEFAULT_BROWSER_TIMEOUT = 10  # 浏览器操作默认超时时间（秒）
-DEFAULT_PAGE_TIMEOUT = 3000   # 页面元素等待默认超时时间（毫秒）
+DEFAULT_BROWSER_TIMEOUT = 30  # 浏览器操作默认超时时间（秒）
+DEFAULT_PAGE_TIMEOUT = 30000  # 页面操作默认超时时间（毫秒）
 
 # 数据库相关
 DATABASE_PATH = str(get_program_data_dir() / 'accounts.db')  # 数据库文件路径

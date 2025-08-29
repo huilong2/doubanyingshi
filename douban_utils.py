@@ -88,8 +88,7 @@ class DoubanUtils:
             'login_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             'proxy': account[9],
             'running_status': running_status,
-            'note': account[11],
-            'group': account[12]
+            'note': account[11]
         }
     
     @staticmethod
@@ -101,4 +100,4 @@ class DoubanUtils:
               f"登录状态={account_data['login_status']}, 主页={account_data['homepage']}, "
               f"登录时间={account_data['login_time']}, 代理={account_data['proxy']}, "
               f"运行状态={account_data['running_status']}, 备注={account_data['note']}, "
-              f"分组={account_data['group']}, Cookie长度={len(account_data['ck']) if account_data['ck'] else 0}")
+              f"Cookie长度={len(account_data['ck']) if account_data['ck'] else 0}")

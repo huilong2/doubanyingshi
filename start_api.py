@@ -1,5 +1,5 @@
 import uvicorn
-from api import app
+from qitagongju.api import app
 
 def start_api():
     """启动API服务"""

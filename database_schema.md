@@ -22,8 +22,24 @@
 | proxy            | TEXT     |                     | 绑定的代理IP地址       |
 | running_status   | TEXT     |                     | 当前运行状态 (例如, "空闲") |
 | note             | TEXT     |                     | 备注信息               |
+| zhiwenshuju      | TEXT     |                     | 指纹数据 (JSON格式)    |
 | gouxuan          | INTEGER  | DEFAULT 0           | 是否在界面上勾选 (1=是, 0=否) |
 
+字段顺序:
+0: id
+1: username
+2: password
+3: ck
+4: nickname
+5: account_id
+6: login_status
+7: homepage
+8: login_time
+9: proxy
+10: running_status
+11: note
+12: zhiwenshuju
+13: gouxuan
 ---
 
 ## 表: `movies`

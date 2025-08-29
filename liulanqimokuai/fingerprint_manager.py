@@ -16,22 +16,33 @@ class FingerprintGenerator:
         self.logger = logging.getLogger(__name__)
         
     def generate_random_fingerprint(self) -> Dict[str, Any]:
-        """生成随机的浏览器指纹"""
-        # 常用的User-Agent列表
-        windows_chrome_versions = ['110.0.5481.177', '111.0.5563.111', '112.0.5615.138', '113.0.5672.63', '114.0.5735.198']
-        mac_chrome_versions = ['110.0.5481.177', '111.0.5563.111', '112.0.5615.138', '113.0.5672.63', '114.0.5735.198']
+        """生成随机的浏览器指纹 - Windows专用"""
+        # 常用的Chrome版本列表（针对Windows系统）
+        windows_chrome_versions = [
+            '110.0.5481.177', '111.0.5563.111', '112.0.5615.138', 
+            '113.0.5672.63', '114.0.5735.198', '115.0.5790.171',
+            '116.0.5845.188', '117.0.5938.132', '118.0.5993.118'
+        ]
         
-        # 随机选择平台
-        os_platform = random.choice(['Windows', 'MacOS'])
+        # 固定为Windows平台
+        os_platform = 'Windows'
         
-        if os_platform == 'Windows':
-            os_info = random.choice(['Windows NT 10.0', 'Windows NT 11.0'])
-            chrome_version = random.choice(windows_chrome_versions)
-            platform_info = f"({os_info}; Win64; x64)"
-        else:
-            os_info = random.choice(['Macintosh', 'MacIntel'])
-            chrome_version = random.choice(mac_chrome_versions)
-            platform_info = f"({os_info}; Intel Mac OS X 10_15_7)"
+        # Windows版本列表
+        windows_versions = [
+            'Windows NT 10.0',  # Windows 10
+            'Windows NT 11.0',  # Windows 11
+            'Windows NT 6.3',   # Windows 8.1
+            'Windows NT 6.2',   # Windows 8
+            'Windows NT 6.1',   # Windows 7
+            'Windows NT 6.0',   # Windows Vista
+        ]
+        
+        os_info = random.choice(windows_versions)
+        chrome_version = random.choice(windows_chrome_versions)
+        
+        # 系统架构
+        architecture = random.choice(['Win64; x64', 'Win32'])
+        platform_info = f"({os_info}; {architecture})"
         
         # 构建User-Agent
         user_agent = f"Mozilla/5.0 {platform_info} AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{chrome_version} Safari/537.36"
@@ -64,29 +75,30 @@ class FingerprintGenerator:
         # 时区
         timezones = [
             'Asia/Shanghai',
-            'Asia/Beijing',
-            'Asia/Hong_Kong',
-            'Asia/Taipei',
-            'Asia/Singapore',
         ]
         
-        # WebGL厂商和渲染器
+        # WebGL厂商和渲染器（Windows系统特有）
         webgl_vendors = [
             'Google Inc. (Intel)',
             'Google Inc. (NVIDIA)',
             'Google Inc. (AMD)',
-            'Intel Inc.',
+            'Intel Corporation',
             'NVIDIA Corporation',
-            'AMD',
+            'Advanced Micro Devices, Inc.',
+            'Microsoft Corporation',
         ]
         
         webgl_renderers = [
-            'Intel Iris OpenGL Engine',
-            'NVIDIA GeForce GTX 1060/PCIe/SSE2',
-            'AMD Radeon Pro 5500M OpenGL Engine',
             'Intel(R) UHD Graphics 620',
+            'Intel(R) HD Graphics 630',
+            'NVIDIA GeForce GTX 1060/PCIe/SSE2',
             'NVIDIA GeForce RTX 3060/PCIe/SSE2',
+            'NVIDIA GeForce RTX 2060/PCIe/SSE2',
+            'AMD Radeon RX 580 Series',
             'AMD Radeon RX 6600 XT',
+            'AMD Radeon(TM) Vega 8 Graphics',
+            'Microsoft Basic Render Driver',
+            'Intel(R) Iris(R) Plus Graphics',
         ]
         
         # 常用字体
@@ -111,10 +123,15 @@ class FingerprintGenerator:
             'Adobe Flash Player',
         ]
         
-        # 生成指纹数据
+        # 生成指纹数据 - Windows专用
         fingerprint = {
             'user_agent': user_agent,
             'platform': os_platform,
+            'platform_details': {
+                'os_version': os_info,
+                'architecture': architecture,
+                'windows_build': random.randint(17000, 22000),  # Windows 10/11 版本号范围
+            },
             'language': random.choice(languages),
             'screen': random.choice(screen_resolutions),
             'color_depth': random.choice([24, 32]),
@@ -127,12 +144,19 @@ class FingerprintGenerator:
             'audio': self._generate_audio_fingerprint(),
             'media_devices': self._generate_media_devices(),
             'geolocation': self._generate_geolocation(),
-            'hardware_concurrency': random.choice([4, 6, 8, 12, 16]),
-            'device_memory': random.choice([4, 8, 16, 32]),
-            'max_touch_points': random.choice([0, 1, 5, 10]),
+            'hardware_concurrency': random.choice([2, 4, 6, 8, 12, 16, 24]),  # 增加更多CPU核心数选项
+            'device_memory': random.choice([2, 4, 8, 16, 32, 64]),  # 增加更多内存选项
+            'max_touch_points': random.choice([0, 1, 5, 10]) if 'NT 10.0' in os_info or 'NT 11.0' in os_info else 0,  # 仅Win10/11支持触摸屏
             'connection': self._generate_connection_info(),
             'battery': self._generate_battery_info(),
             'permissions': self._generate_permissions(),
+            # Windows特有指纹信息
+            'windows_specific': {
+                'device_id': f'{{{random.randint(10000000, 99999999)}-{random.randint(1000, 9999)}-{random.randint(1000, 9999)}-{random.randint(1000, 9999)}-{random.randint(100000000000, 999999999999)}}}',
+                'os_build': f'{random.randint(10, 25)}.{random.randint(0, 999)}.{random.randint(1000, 9999)}',
+                'defender_status': random.choice(['enabled', 'disabled']),
+                'edge_version': f'{random.randint(90, 118)}.{random.randint(0, 9999)}.{random.randint(0, 9999)}.{random.randint(0, 9999)}',
+            }
         }
         
         return fingerprint
@@ -239,35 +263,6 @@ class FingerprintGenerator:
             'microphone': random.choice(['granted', 'denied', 'prompt']),
         }
         
-    def load_fingerprint_from_file(self, cache_dir: str) -> Optional[Dict[str, Any]]:
-        """从文件加载指纹数据"""
-        try:
-            fingerprint_path = Path(cache_dir) / 'fingerprint.json'
-            if not fingerprint_path.exists():
-                return None
-                
-            with fingerprint_path.open('r', encoding='utf-8') as f:
-                return json.load(f)
-                
-        except Exception as e:
-            self.logger.error(f"加载指纹数据时出错: {str(e)}")
-            return None
-            
-    def save_fingerprint_to_file(self, fingerprint: Dict[str, Any], cache_dir: str) -> bool:
-        """保存指纹数据到文件"""
-        try:
-            fingerprint_path = Path(cache_dir) / 'fingerprint.json'
-            fingerprint_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            with fingerprint_path.open('w', encoding='utf-8') as f:
-                json.dump(fingerprint, f, ensure_ascii=False, indent=2)
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"保存指纹数据时出错: {str(e)}")
-            return False
-
-
 class FingerprintManager:
     """浏览器指纹管理器，用于管理每个账号的独立指纹数据"""
     
@@ -276,144 +271,120 @@ class FingerprintManager:
         self.logger = logging.getLogger(__name__)
         self.data_manager = DataManager()
     
-    def ensure_account_fingerprint(self, account_cache_dir: str) -> Optional[Dict[str, Any]]:
+    def ensure_account_fingerprint(self, account_id: int) -> Optional[Dict[str, Any]]:
         """
         确保账号有指纹数据：
-        - 优先从数据库加载指纹数据
-        - 如果数据库中不存在，尝试从文件加载
-        - 如果都不存在，则生成新的指纹数据并保存到数据库和文件
+        - 只从数据库加载指纹数据
+        - 如果数据库中不存在且提供了account_id，则生成新的指纹数据并保存到数据库
         
         Args:
-            account_cache_dir: 账号缓存目录路径
+            account_id: 账号ID
             
         Returns:
             Dict[str, Any]: 指纹数据字典，如果失败则返回None
         """
         try:
-            # 获取账号ID
-            account_id = self.data_manager.get_account_id_by_cache_dir(account_cache_dir)
-            
-            # 优先从数据库加载指纹数据
-            if account_id:
-                fingerprint = self.data_manager.load_fingerprint(account_id)
-                if fingerprint:
-                    self.logger.info(f"已从数据库加载账号ID {account_id} 的指纹数据")
+            # 尝试从数据库获取指纹数据
+            fingerprint_json = self.data_manager.get_account_fingerprint(account_id)
+            if fingerprint_json:
+                try:
+                    fingerprint = json.loads(fingerprint_json)
+                    self.logger.info(f"已从数据库加载账号 {account_id} 的指纹数据")
                     return fingerprint
+                except json.JSONDecodeError as e:
+                    self.logger.error(f"解析数据库中的指纹数据失败: {str(e)}")
             
-            # 确保账号缓存目录存在
-            cache_path = Path(account_cache_dir)
-            cache_path.mkdir(parents=True, exist_ok=True)
-            
-            # 指纹文件路径
-            fingerprint_file = cache_path / "fingerprint.json"
-            
-            # 检查指纹文件是否存在（向后兼容）
-            if fingerprint_file.exists():
-                # 加载已存在的指纹数据
-                fingerprint = self.generator.load_fingerprint_from_file(str(cache_path))
-                if fingerprint:
-                    self.logger.info(f"已从文件加载账号 {account_cache_dir} 的指纹数据")
-                    # 如果能获取到账号ID，将指纹数据保存到数据库
-                    if account_id:
-                        self.data_manager.save_fingerprint(account_id, fingerprint)
-                    return fingerprint
-                else:
-                    self.logger.warning(f"加载账号 {account_cache_dir} 的指纹数据失败，将重新生成")
-            
-            # 生成新的指纹数据
-            self.logger.info(f"为账号 {account_cache_dir} 生成新的指纹数据")
+            # 如果数据库中没有指纹数据，生成新的指纹数据
+            self.logger.info(f"为账号 {account_id} 生成新的指纹数据")
             fingerprint = self.generator.generate_random_fingerprint()
             
             # 保存指纹数据到数据库
-            if account_id:
-                self.data_manager.save_fingerprint(account_id, fingerprint)
-                self.logger.info(f"已保存账号ID {account_id} 的指纹数据到数据库")
-            
-            # 同时保存到文件（向后兼容）
-            if self.generator.save_fingerprint_to_file(fingerprint, str(cache_path)):
-                self.logger.info(f"已保存账号 {account_cache_dir} 的指纹数据到文件")
+            fingerprint_json = json.dumps(fingerprint, ensure_ascii=False)
+            if self.data_manager.update_account_fingerprint(account_id, fingerprint_json):
+                self.logger.info(f"已保存账号 {account_id} 的指纹数据到数据库")
             else:
-                self.logger.warning(f"保存账号 {account_cache_dir} 的指纹数据到文件失败")
+                self.logger.warning(f"保存账号 {account_id} 的指纹数据到数据库失败")
             
             return fingerprint
                 
         except Exception as e:
-            self.logger.error(f"处理账号 {account_cache_dir} 的指纹数据时出错: {str(e)}")
+            self.logger.error(f"处理账号 {account_id} 的指纹数据时出错: {str(e)}")
             return None
     
-    def get_account_fingerprint(self, account_cache_dir: str) -> Optional[Dict[str, Any]]:
+    def get_account_fingerprint(self, account_id: int) -> Optional[Dict[str, Any]]:
         """
         获取账号的指纹数据（仅加载，不生成）
         
         Args:
-            account_cache_dir: 账号缓存目录路径
+            account_id: 账号ID
             
         Returns:
-            Dict[str, Any]: 指纹数据字典，如果失败或文件不存在则返回None
+            Dict[str, Any]: 指纹数据字典，如果失败则返回None
         """
         try:
-            # 获取账号ID
-            account_id = self.data_manager.get_account_id_by_cache_dir(account_cache_dir)
-            
-            # 优先从数据库加载指纹数据
-            if account_id:
-                fingerprint = self.data_manager.load_fingerprint(account_id)
-                if fingerprint:
-                    self.logger.info(f"已从数据库加载账号ID {account_id} 的指纹数据")
+            # 尝试从数据库获取指纹数据
+            fingerprint_json = self.data_manager.get_account_fingerprint(account_id)
+            if fingerprint_json:
+                try:
+                    fingerprint = json.loads(fingerprint_json)
+                    self.logger.info(f"已从数据库加载账号 {account_id} 的指纹数据")
                     return fingerprint
+                except json.JSONDecodeError as e:
+                    self.logger.error(f"解析数据库中的指纹数据失败: {str(e)}")
+                    return None
             
-            # 如果数据库中没有，尝试从文件加载（向后兼容）
-            fingerprint = self.generator.load_fingerprint_from_file(account_cache_dir)
-            if fingerprint:
-                self.logger.info(f"已从文件加载账号 {account_cache_dir} 的指纹数据")
-                # 如果能获取到账号ID，将指纹数据保存到数据库
-                if account_id:
-                    self.data_manager.save_fingerprint(account_id, fingerprint)
-                return fingerprint
-            else:
-                self.logger.warning(f"账号 {account_cache_dir} 的指纹数据不存在")
-                return None
+            # 如果数据库中没有数据，返回None
+            self.logger.warning(f"账号 {account_id} 的指纹数据不存在")
+            return None
                 
         except Exception as e:
-            self.logger.error(f"加载账号 {account_cache_dir} 的指纹数据时出错: {str(e)}")
+            self.logger.error(f"加载账号 {account_id} 的指纹数据时出错: {str(e)}")
             return None
     
-    def save_account_fingerprint(self, account_cache_dir: str, fingerprint: Dict[str, Any]) -> bool:
+    def save_account_fingerprint(self, account_id: int, fingerprint: Dict[str, Any]) -> bool:
         """
-        保存账号的指纹数据到数据库和文件
+        保存账号的指纹数据到数据库
         
         Args:
-            account_cache_dir: 账号缓存目录路径
+            account_id: 账号ID
             fingerprint: 指纹数据字典
             
         Returns:
-            bool: 保存是否成功（只要数据库或文件任一保存成功即返回True）
+            bool: 保存是否成功
         """
         try:
-            success = False
-            
-            # 获取账号ID
-            account_id = self.data_manager.get_account_id_by_cache_dir(account_cache_dir)
-            
             # 保存到数据库
-            if account_id:
-                db_result = self.data_manager.save_fingerprint(account_id, fingerprint)
-                if db_result:
-                    self.logger.info(f"已保存账号ID {account_id} 的指纹数据到数据库")
-                    success = True
-                else:
-                    self.logger.error(f"保存账号ID {account_id} 的指纹数据到数据库失败")
-            
-            # 同时保存到文件（向后兼容）
-            file_result = self.generator.save_fingerprint_to_file(fingerprint, account_cache_dir)
-            if file_result:
-                self.logger.info(f"已保存账号 {account_cache_dir} 的指纹数据到文件")
-                success = True
+            fingerprint_json = json.dumps(fingerprint, ensure_ascii=False)
+            if self.data_manager.update_account_fingerprint(account_id, fingerprint_json):
+                self.logger.info(f"已保存账号 {account_id} 的指纹数据到数据库")
+                return True
             else:
-                self.logger.warning(f"保存账号 {account_cache_dir} 的指纹数据到文件失败")
-            
-            return success
+                self.logger.warning(f"保存账号 {account_id} 的指纹数据到数据库失败")
+                return False
             
         except Exception as e:
-            self.logger.error(f"保存账号 {account_cache_dir} 的指纹数据时出错: {str(e)}")
+            self.logger.error(f"保存账号 {account_id} 的指纹数据时出错: {str(e)}")
+            return False
+    
+    def delete_account_fingerprint(self, account_id: int) -> bool:
+        """
+        从数据库中删除账号的指纹数据
+        
+        Args:
+            account_id: 账号ID
+            
+        Returns:
+            bool: 删除是否成功
+        """
+        try:
+            # 将zhiwenshuju字段设置为空字符串来删除指纹数据
+            if self.data_manager.update_account_fingerprint(account_id, ""):
+                self.logger.info(f"已删除账号 {account_id} 的指纹数据")
+                return True
+            else:
+                self.logger.warning(f"删除账号 {account_id} 的指纹数据失败")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"删除账号 {account_id} 的指纹数据时出错: {str(e)}")
             return False

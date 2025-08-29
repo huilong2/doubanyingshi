@@ -57,7 +57,6 @@
 | **功能选择** | |
 | "签名" 复选框 | `self.signature_checkbox` |
 | "说说" 复选框 | `self.status_checkbox` |
-| "小组" 复选框 | `self.group_checkbox` |
 | "短语" 复选框 | `self.phrase_checkbox` |
 | **间隔设置** | |
 | 操作间隔 (最小) | `self.operation_interval_min` |
