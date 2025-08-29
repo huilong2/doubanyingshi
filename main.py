@@ -15,6 +15,8 @@ else:
     # 对于较老的Python版本，使用flush
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
+# 强制无缓冲环境变量，确保第三方库输出也实时
+os.environ['PYTHONUNBUFFERED'] = '1'
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTableWidget, QTableWidgetItem, QMessageBox,
@@ -81,10 +83,22 @@ def setup_logging():
     
     # 配置根日志记录器
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
-    
-    # 添加控制台处理器
-    console_handler = logging.StreamHandler()
+    root_logger.setLevel(logging.INFO)
+
+    # 清理已有处理器，防止重复与缓冲问题
+    for h in list(root_logger.handlers):
+        root_logger.removeHandler(h)
+
+    # 自定义控制台处理器：每次emit后立即flush
+    class FlushStreamHandler(logging.StreamHandler):
+        def emit(self, record):
+            super().emit(record)
+            try:
+                self.flush()
+            except Exception:
+                pass
+
+    console_handler = FlushStreamHandler(stream=sys.stdout)
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
@@ -93,10 +107,6 @@ def setup_logging():
     logging.getLogger('playwright').setLevel(logging.WARNING)
     logging.getLogger('urllib3').setLevel(logging.WARNING)
     logging.getLogger('asyncio').setLevel(logging.WARNING)
-    
-    # 设置自定义模块的日志级别
-    logging.getLogger('AccountManager').setLevel(logging.WARNING)
-    logging.getLogger('root').setLevel(logging.WARNING)
     
     return root_logger
 

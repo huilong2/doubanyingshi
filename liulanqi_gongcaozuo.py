@@ -69,6 +69,23 @@ class LiulanqiGongcaozuo:
         self._main_window = None
         self._ui_callback = None
         
+        # 日志去抖状态
+        import time
+        self._last_log_ms = {}
+        self._monotonic_ms = lambda: int(time.monotonic() * 1000)
+        def _should_log(key: str, interval_ms: int = 800) -> bool:
+            now = self._monotonic_ms()
+            last = self._last_log_ms.get(key, 0)
+            if now - last >= interval_ms:
+                self._last_log_ms[key] = now
+                return True
+            return False
+        self._should_log = _should_log
+        
+        # 用户信息获取状态（防止重复获取）
+        self._user_info_fetched = False
+        self._user_info_fetching = False
+        
         # 从账号目录加载指纹数据
         if self.peizhi.huanchunlujing:
             from utils import ensure_account_fingerprint
@@ -129,29 +146,64 @@ class LiulanqiGongcaozuo:
         # 监听上下文关闭（所有标签页关闭）
         self.controller.on('context_close', lambda data: self._handle_browser_close())
         
-        # 监听页面加载事件
-        self.controller.on('page_load', lambda data: self.log_event("page", "页面加载完成"))
+        # 监听页面加载事件（按需触发一次用户信息获取）
+        def _on_page_load(data):
+            if self._should_log("page_load", 800):
+                self.log_event("page", "页面加载完成")
+            # 仅当未获取成功且当前不在获取中时触发
+            if not self._user_info_fetched and not self._user_info_fetching:
+                self._user_info_fetching = True
+                try:
+                    future = self.controller.run_async(self._get_douban_user_info())
+                    def _done(f):
+                        try:
+                            user_info = f.result()
+                            if user_info:
+                                login_status = user_info.get('login_status') or ('已登录' if (user_info.get('id') or user_info.get('name')) else '未登录')
+                                if login_status == '已登录' and (user_info.get('id') or user_info.get('name')):
+                                    self._user_info_fetched = True
+                                    logger.info(f"页面加载后获取到用户数据: {user_info}")
+                                    if self.db_manager:
+                                        # 使用异步回调更新账号信息
+                                        self._schedule_account_update(user_info, login_status)
+                        except Exception as e:
+                            logger.warning(f"页面加载后获取账号信息失败: {str(e)}")
+                        finally:
+                            self._user_info_fetching = False
+                    future.add_done_callback(_done)
+                except Exception as e:
+                    logger.warning(f"调度获取账号信息失败: {str(e)}")
+                    self._user_info_fetching = False
+        self.controller.on('page_load', _on_page_load)
         
         # 监听URL变化事件
-        self.controller.on('url_change', lambda data: self.log_event("page", f"URL变化: {data.get('url', '')}"))
+        def _on_url_change(data):
+            url = data.get('new_url') or data.get('url', '')
+            if self._should_log("url_change", 500):
+                self.log_event("page", f"URL变化: {url}")
+        self.controller.on('url_change', _on_url_change)
         
         # 监听错误事件
         self.controller.on('error', lambda data: self.log_event("error", data.get('message', '')))
-
+        
         # 监听标签关闭：若所有标签关闭，则视为浏览器关闭
         def _on_page_closed(_data: dict):
+            # 如果浏览器已关闭，停止处理事件
+            if self._is_closed:
+                return
+                
             try:
                 context = getattr(self.controller, 'context', None)
                 if not context:
                     return
-                
-                # 添加一个短暂的延迟，给程序更多时间来处理页面关闭事件
-                # 特别是在执行异步操作时，避免时序问题
                 import asyncio
                 loop = asyncio.get_event_loop()
-                
                 def check_remaining_pages():
                     try:
+                        # 再次检查浏览器是否已关闭
+                        if self._is_closed:
+                            return
+                            
                         remaining = []
                         try:
                             remaining = list(context.pages)
@@ -161,8 +213,6 @@ class LiulanqiGongcaozuo:
                             self._handle_browser_close()
                     except Exception:
                         pass
-                
-                # 延迟0.5秒后检查剩余页面
                 loop.call_later(0.5, check_remaining_pages)
             except Exception:
                 pass
@@ -200,6 +250,30 @@ class LiulanqiGongcaozuo:
             if self.browser_signals:
                 self.browser_signals.info.emit(f"浏览器 {self.peizhi.zhanghao} 已关闭")
                 self.browser_signals.account_closed.emit(self.peizhi.zhanghao)
+
+    def _schedule_account_update(self, user_info, login_status):
+        """调度异步更新账号信息"""
+        try:
+            if self.controller and hasattr(self.controller, '_loop'):
+                logger.info(f"开始调度账号信息更新: {login_status}")
+                # 使用控制器的事件循环执行异步更新
+                import asyncio
+                future = asyncio.run_coroutine_threadsafe(
+                    self._update_douban_account_info(user_info, login_status), 
+                    self.controller._loop
+                )
+                # 减少超时时间到5秒，避免长时间阻塞
+                result = future.result(timeout=5)
+                logger.info(f"账号信息更新完成: {result if result else '无返回值'}")
+            else:
+                logger.warning("控制器事件循环不可用，无法更新账号信息")
+        except asyncio.TimeoutError:
+            logger.error("账号信息更新超时（5秒），可能卡住了")
+        except Exception as e:
+            logger.error(f"调度账号信息更新失败: {str(e)}")
+            # 打印详细的异常信息
+            import traceback
+            logger.error(f"详细错误信息: {traceback.format_exc()}")
 
     def _update_account_status(self, status, keep_cookie=True):
         """更新数据库中的账号状态
@@ -472,17 +546,17 @@ class LiulanqiGongcaozuo:
                 if user_info:
                     logger.info(f"获取到用户数据: {user_info}")
                     
-                    # 更新数据库
+                    # 更新数据库 - 使用调度方法避免事件循环问题
                     if self.db_manager:
-                        self._update_douban_account_info(user_info, login_status)
+                        self._schedule_account_update(user_info, login_status)
             except Exception as e:
                 logger.error(f"获取用户信息超时: {str(e)}")
             
         except Exception as e:
             logger.error(f"检查豆瓣状态失败: {str(e)}")
 
-    async def _wait_for_douban_page_ready(self, timeout: int = DEFAULT_BROWSER_TIMEOUT):
-        """智能等待豆瓣页面准备就绪"""
+    async def _wait_for_douban_page_ready(self, timeout: int = 10):
+        """智能等待豆瓣页面准备就绪 - 优化版"""
         try:
             # 首先检查浏览器和页面状态
             if not self.controller or not self.controller.browser or not self.controller.page:
@@ -497,39 +571,59 @@ class LiulanqiGongcaozuo:
                 logger.warning("页面已关闭，无法等待页面就绪")
                 return
             
-            # 等待页面基本加载完成
-            try:
-                future = self.controller.run_async(self.controller.page.wait_for_load_state('domcontentloaded', timeout=timeout * 1000))
-                future.result(timeout=timeout * 1000)
-            except Exception as e:
-                logger.warning(f"等待页面加载完成时出错: {e}")
-                return
+            logger.info("开始智能等待页面就绪...")
             
-            # 等待关键元素出现（登录按钮或用户信息）
+            # 等待页面基本加载完成 - 使用较短的超时时间
             try:
-                # 尝试等待登录按钮（未登录状态）
-                future = self.controller.run_async(self.controller.page.wait_for_selector('.nav-login', timeout=DEFAULT_PAGE_TIMEOUT))
-                future.result(timeout=DEFAULT_PAGE_TIMEOUT)
-                logger.info("检测到未登录状态")
-            except Exception as nav_err:
-                try:
-                    # 尝试等待用户信息（已登录状态）
-                    future = self.controller.run_async(self.controller.page.wait_for_selector('.nav-user-account, .user-info', timeout=DEFAULT_PAGE_TIMEOUT))
-                    future.result(timeout=DEFAULT_PAGE_TIMEOUT)
-                    logger.info("检测到已登录状态")
-                except Exception as user_err:
-                    # 如果都找不到，至少等待body元素
+                future = self.controller.run_async(self.controller.page.wait_for_load_state('domcontentloaded', timeout=5000))
+                future.result(timeout=5000)
+                logger.info("页面DOM加载完成")
+            except Exception as e:
+                logger.warning(f"等待页面DOM加载完成时出错: {e}")
+                # 继续执行，不阻塞流程
+            
+            # 智能检测页面状态 - 并行尝试多个选择器，使用较短的超时时间
+            import asyncio
+            
+            async def check_login_status():
+                """并行检查登录状态"""
+                selectors = [
+                    ('.nav-login', '未登录'),
+                    ('.nav-user-account', '已登录'),
+                    ('.user-info', '已登录'),
+                    ('a[href*="/people/"]', '已登录')
+                ]
+                
+                for selector, expected_status in selectors:
                     try:
-                        future = self.controller.run_async(self.controller.page.wait_for_selector('body', timeout=2000))
-                        future.result(timeout=2000)
-                        logger.info("页面基本加载完成")
-                    except Exception as e:
-                        logger.warning(f"等待基本页面元素时出错: {e}")
-                        return
+                        # 使用较短的超时时间
+                        future = self.controller.run_async(self.controller.page.wait_for_selector(selector, timeout=3000))
+                        future.result(timeout=3000)
+                        logger.info(f"检测到{expected_status}状态 (选择器: {selector})")
+                        return expected_status
+                    except Exception:
+                        continue
+                
+                # 如果都找不到，尝试检查body元素
+                try:
+                    future = self.controller.run_async(self.controller.page.wait_for_selector('body', timeout=2000))
+                    future.result(timeout=2000)
+                    logger.info("页面基本加载完成，但无法确定登录状态")
+                    return "未知"
+                except Exception:
+                    logger.warning("无法检测页面状态")
+                    return "未知"
+            
+            # 执行登录状态检查
+            try:
+                login_status = await asyncio.wait_for(check_login_status(), timeout=timeout)
+                logger.info(f"页面就绪检测完成，登录状态: {login_status}")
+            except asyncio.TimeoutError:
+                logger.warning(f"页面就绪检测超时({timeout}秒)，继续执行")
             
         except Exception as e:
-            logger.warning(f"等待页面元素超时，继续执行: {e}")
-            # 即使超时也继续执行，不阻塞流程
+            logger.warning(f"等待页面元素时出错: {e}")
+            # 即使出错也继续执行，不阻塞流程
 
     async def _wait_for_browser_ready(self, timeout: int = DEFAULT_BROWSER_TIMEOUT) -> None:
         """等待浏览器准备就绪"""
@@ -586,34 +680,122 @@ class LiulanqiGongcaozuo:
     async def _get_douban_user_info(self) -> Optional[Dict[str, Any]]:
         """获取豆瓣用户信息"""
         try:
-            # 使用统一的用户信息获取脚本
+            logger.info("开始获取豆瓣用户信息（_get_douban_user_info）")
+            # 基本校验
+            if not self.controller or not self.controller.page or not self.controller.context:
+                logger.info("获取用户信息失败：page/context 不可用")
+                return { 'login_status': '未登录' }
+
+            # 1) 首选：在页面线程直接执行 JS（避免跨线程 result 阻塞）
             from douban_utils import DoubanUtils
-            user_info_future = self.controller.run_async(self.controller.page.evaluate(DoubanUtils.get_user_info_script()))
-            # 等待结果
-            user_info = user_info_future.result(timeout=DEFAULT_BROWSER_TIMEOUT)
-            return user_info
+            try:
+                user_info = await asyncio.wait_for(
+                    self.controller.page.evaluate(DoubanUtils.get_user_info_script()),
+                    timeout=DEFAULT_BROWSER_TIMEOUT
+                )
+            except Exception:
+                user_info = None
+
+            if user_info and isinstance(user_info, dict):
+                if user_info.get('login_status') == '已登录' and user_info.get('id') and user_info.get('name'):
+                    logger.info(f"获取豆瓣用户信息成功: {user_info}")
+                    return user_info
+
+            # 2) 回退：从 Cookie 解析 dbcl2 获取 uid
+            uid = None
+            ck_value = None
+            try:
+                cookies = await asyncio.wait_for(
+                    self.controller.context.cookies(),
+                    timeout=DEFAULT_BROWSER_TIMEOUT
+                )
+                for c in cookies:
+                    if c.get('name') == 'dbcl2' and isinstance(c.get('value'), str):
+                        val = c.get('value')
+                        if ':' in val:
+                            uid = val.split(':', 1)[0]
+                    if c.get('name') == 'ck':
+                        ck_value = c.get('value')
+            except Exception:
+                pass
+
+            # 3) 回退：多套 DOM 选择器尝试获取昵称
+            name_value = None
+            try:
+                name_selectors = [
+                    ".nav-user-account a span",
+                    "li.nav-user-account a span",
+                    "a[href*='/people/'] span",
+                    ".user-info .name",
+                    ".nav-user-account a"
+                ]
+                get_name_js = """
+                    (sels) => {
+                        for (const s of sels) {
+                            const el = document.querySelector(s);
+                            if (el && el.textContent && el.textContent.trim()) {
+                                return el.textContent.trim();
+                            }
+                        }
+                        return null;
+                    }
+                """
+                name_value = await asyncio.wait_for(
+                    self.controller.page.evaluate(get_name_js, name_selectors),
+                    timeout=DEFAULT_BROWSER_TIMEOUT
+                )
+            except Exception:
+                pass
+
+            if uid or name_value:
+                info = {
+                    'login_status': '已登录',
+                    'id': uid or '',
+                    'name': name_value or ''
+                }
+                logger.info(f"获取豆瓣用户信息成功(回退): {info}")
+                return info
+
+            logger.info("获取豆瓣用户信息失败，判定未登录")
+            return { 'login_status': '未登录' }
         except Exception as e:
             logger.error(f"获取用户信息失败: {str(e)}")
             return None
 
     async def _get_cookie_string(self):
         """获取当前浏览器的Cookie字符串"""
-        if not self.controller or not self.controller.context:
-            self.log_event("警告", "浏览器上下文未初始化，无法获取Cookie")
-            return ""
         try:
-            # 使用Playwright API获取所有Cookie
-            cookies_future = self.controller.run_async(self.controller.context.cookies())
-            cookies = cookies_future.result(timeout=DEFAULT_BROWSER_TIMEOUT)
+            # 基本可用性检查
+            if not self.controller or not getattr(self.controller, 'context', None):
+                self.log_event("警告", "浏览器上下文未初始化，无法获取Cookie")
+                return ""
+            if hasattr(self.controller, 'browser') and self.controller.browser and not self.controller.browser.is_connected():
+                self.log_event("警告", "浏览器已断开连接，无法获取Cookie")
+                return ""
+
+            logger.info("开始获取Cookie...")
+            # 使用原生 await 获取，避免跨事件循环阻塞，设置合理的超时时间
+            cookies = await asyncio.wait_for(
+                self.controller.context.cookies(),
+                timeout=3.0  # 3秒超时，避免长时间等待
+            )
             # 转换为标准Cookie字符串格式
-            cookie_str = "; ".join([f"{cookie['name']}={cookie['value']}" for cookie in cookies])
-            self.log_event("调试", f"成功获取Cookie，长度: {len(cookie_str)} 字符")
+            cookie_str = "; ".join([f"{c.get('name')}={c.get('value')}" for c in (cookies or []) if c.get('name') and c.get('value')])
+            logger.info(f"成功获取Cookie，条目数: {len(cookies or [])}，长度: {len(cookie_str)} 字符")
+            self.log_event("调试", f"成功获取Cookie，条目数: {len(cookies or [])}，长度: {len(cookie_str)} 字符")
             return cookie_str
+        except asyncio.TimeoutError:
+            error_msg = "获取Cookie超时（3秒）"
+            logger.warning(error_msg)
+            self.log_event("错误", error_msg)
+            return ""
         except Exception as e:
-            self.log_event("错误", f"获取Cookie失败: {str(e)}")
+            error_msg = f"获取Cookie失败: {str(e)}"
+            logger.error(error_msg)
+            self.log_event("错误", error_msg)
             return ""
 
-    def _update_douban_account_info(self, user_info: Dict[str, Any], login_status: str):
+    async def _update_douban_account_info(self, user_info: Dict[str, Any], login_status: str):
         """更新豆瓣账号信息到数据库"""
         try:
             if self.db_manager:
@@ -626,16 +808,18 @@ class LiulanqiGongcaozuo:
                         if login_status == "已登录":
                             # 只有当用户已登录时才获取cookie
                             try:
-                                # 获取Cookie字符串（使用同步方式调用异步方法）
-                                import asyncio
-                                if self.controller and hasattr(self.controller, '_loop'):
-                                    future = asyncio.run_coroutine_threadsafe(self._get_cookie_string(), self.controller._loop)
-                                    cookie_str = future.result(timeout=5)  # 5秒超时
-                                    print(f"[调试] 获取到的Cookie: {cookie_str[:30]}...")  # 调试信息
+                                # 直接调用异步方法获取Cookie
+                                cookie_str = await self._get_cookie_string()
+                                if cookie_str:
+                                    print(f"[调试] 获取到的Cookie: {cookie_str[:50]}...")  # 调试信息
+                                else:
+                                    print(f"[调试] 获取到的Cookie为空")
                             except Exception as e:
-                                self.log_event("警告", f"获取Cookie时出错: {str(e)}")
-                                print(f"[错误] 获取Cookie失败: {str(e)}")  # 调试信息
+                                error_msg = f"获取Cookie时出错: {str(e)}"
+                                self.log_event("警告", error_msg)
+                                print(f"[错误] {error_msg}")  # 调试信息
                                 # 出错时保留现有cookie值
+                                cookie_str = account[3]
                         else:
                             # 未登录时，将cookie设置为空字符串
                             cookie_str = ""
