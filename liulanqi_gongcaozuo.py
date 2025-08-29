@@ -148,8 +148,19 @@ class LiulanqiGongcaozuo:
         
         # 监听页面加载事件（按需触发一次用户信息获取）
         def _on_page_load(data):
+            if self._is_closed:
+                return
+                
+            # 防重复调用：检查是否已经处理过这个页面
+            current_url = getattr(self.controller, 'page', None) and getattr(self.controller.page, 'url', '')
+            if hasattr(self, '_last_page_load_url') and self._last_page_load_url == current_url:
+                logger.debug(f"跳过重复的页面加载事件: {current_url}")
+                return
+            self._last_page_load_url = current_url
+            
             if self._should_log("page_load", 800):
                 self.log_event("page", "页面加载完成")
+                
             # 仅当未获取成功且当前不在获取中时触发
             if not self._user_info_fetched and not self._user_info_fetching:
                 self._user_info_fetching = True
@@ -157,6 +168,9 @@ class LiulanqiGongcaozuo:
                     future = self.controller.run_async(self._get_douban_user_info())
                     def _done(f):
                         try:
+                            if self._is_closed:
+                                return
+                                
                             user_info = f.result()
                             if user_info:
                                 login_status = user_info.get('login_status') or ('已登录' if (user_info.get('id') or user_info.get('name')) else '未登录')
@@ -252,23 +266,20 @@ class LiulanqiGongcaozuo:
                 self.browser_signals.account_closed.emit(self.peizhi.zhanghao)
 
     def _schedule_account_update(self, user_info, login_status):
-        """调度异步更新账号信息"""
+        """调度异步更新账号信息 - 完全异步执行，不等待结果"""
         try:
             if self.controller and hasattr(self.controller, '_loop'):
                 logger.info(f"开始调度账号信息更新: {login_status}")
-                # 使用控制器的事件循环执行异步更新
+                # 使用控制器的事件循环执行异步更新，不等待结果
                 import asyncio
                 future = asyncio.run_coroutine_threadsafe(
-                    self._update_douban_account_info(user_info, login_status), 
+                    self._update_douban_account_info(user_info, login_status),
                     self.controller._loop
                 )
-                # 减少超时时间到5秒，避免长时间阻塞
-                result = future.result(timeout=5)
-                logger.info(f"账号信息更新完成: {result if result else '无返回值'}")
+                # 不等待结果，让它在后台异步执行
+                logger.info(f"账号信息更新已调度，将在后台执行")
             else:
                 logger.warning("控制器事件循环不可用，无法更新账号信息")
-        except asyncio.TimeoutError:
-            logger.error("账号信息更新超时（5秒），可能卡住了")
         except Exception as e:
             logger.error(f"调度账号信息更新失败: {str(e)}")
             # 打印详细的异常信息
@@ -555,75 +566,93 @@ class LiulanqiGongcaozuo:
         except Exception as e:
             logger.error(f"检查豆瓣状态失败: {str(e)}")
 
-    async def _wait_for_douban_page_ready(self, timeout: int = 10):
-        """智能等待豆瓣页面准备就绪 - 优化版"""
+    async def _wait_for_douban_page_ready(self, timeout: int = 8):
+        """智能等待豆瓣页面准备就绪 - 优化版，避免重复检测"""
         try:
-            # 首先检查浏览器和页面状态
+            # 基本状态检查
             if not self.controller or not self.controller.browser or not self.controller.page:
                 logger.warning("浏览器或页面不可用，无法等待页面就绪")
-                return
+                return "未知"
             
             if not self.controller.browser.is_connected():
                 logger.warning("浏览器已断开连接，无法等待页面就绪")
-                return
+                return "未知"
                 
             if self.controller.page.is_closed():
                 logger.warning("页面已关闭，无法等待页面就绪")
-                return
+                return "未知"
             
             logger.info("开始智能等待页面就绪...")
             
-            # 等待页面基本加载完成 - 使用较短的超时时间
+            # 检查页面是否已经加载完成
             try:
-                future = self.controller.run_async(self.controller.page.wait_for_load_state('domcontentloaded', timeout=5000))
-                future.result(timeout=5000)
-                logger.info("页面DOM加载完成")
+                # 快速检查页面是否已经准备好
+                ready_state = await self.controller.page.evaluate("document.readyState")
+                if ready_state == "complete":
+                    logger.info("页面已经完全加载完成，无需等待")
+                    # 直接尝试检测页面状态
+                    return await self._detect_page_status_quick()
+                elif ready_state == "interactive":
+                    logger.info("页面DOM已加载完成，等待资源加载")
+                    # 等待页面完全加载
+                    await self.controller.page.wait_for_load_state('domcontentloaded', timeout=2000)
+                else:
+                    logger.info(f"页面状态: {ready_state}，等待加载")
+                    # 等待页面基本加载
+                    await self.controller.page.wait_for_load_state('domcontentloaded', timeout=3000)
+                    
             except Exception as e:
-                logger.warning(f"等待页面DOM加载完成时出错: {e}")
+                logger.warning(f"检查页面状态时出错: {e}")
                 # 继续执行，不阻塞流程
             
-            # 智能检测页面状态 - 并行尝试多个选择器，使用较短的超时时间
-            import asyncio
-            
-            async def check_login_status():
-                """并行检查登录状态"""
-                selectors = [
-                    ('.nav-login', '未登录'),
-                    ('.nav-user-account', '已登录'),
-                    ('.user-info', '已登录'),
-                    ('a[href*="/people/"]', '已登录')
-                ]
-                
-                for selector, expected_status in selectors:
-                    try:
-                        # 使用较短的超时时间
-                        future = self.controller.run_async(self.controller.page.wait_for_selector(selector, timeout=3000))
-                        future.result(timeout=3000)
-                        logger.info(f"检测到{expected_status}状态 (选择器: {selector})")
-                        return expected_status
-                    except Exception:
-                        continue
-                
-                # 如果都找不到，尝试检查body元素
-                try:
-                    future = self.controller.run_async(self.controller.page.wait_for_selector('body', timeout=2000))
-                    future.result(timeout=2000)
-                    logger.info("页面基本加载完成，但无法确定登录状态")
-                    return "未知"
-                except Exception:
-                    logger.warning("无法检测页面状态")
-                    return "未知"
-            
-            # 执行登录状态检查
-            try:
-                login_status = await asyncio.wait_for(check_login_status(), timeout=timeout)
-                logger.info(f"页面就绪检测完成，登录状态: {login_status}")
-            except asyncio.TimeoutError:
-                logger.warning(f"页面就绪检测超时({timeout}秒)，继续执行")
+            # 快速检测页面状态
+            return await self._detect_page_status_quick()
             
         except Exception as e:
             logger.warning(f"等待页面元素时出错: {e}")
-            # 即使出错也继续执行，不阻塞流程
+            return "未知"
+
+    async def _detect_page_status_quick(self):
+        """快速检测页面状态 - 使用更短的超时时间"""
+        try:
+            # 并行尝试多个选择器，使用很短的超时时间
+            selectors = [
+                ('.nav-login', '未登录'),
+                ('.nav-user-account', '已登录'),
+                ('.user-info', '已登录'),
+                ('a[href*="/people/"]', '已登录')
+            ]
+            
+            for selector, expected_status in selectors:
+                try:
+                    # 使用很短的超时时间，因为页面可能已经准备好了
+                    await self.controller.page.wait_for_selector(selector, timeout=800)
+                    logger.info(f"检测到{expected_status}状态 (选择器: {selector})")
+                    return expected_status
+                except asyncio.TimeoutError:
+                    # 静默处理超时，继续尝试下一个选择器
+                    logger.debug(f"选择器 {selector} 超时，继续尝试下一个")
+                    continue
+                except Exception as e:
+                    # 处理其他异常
+                    logger.debug(f"选择器 {selector} 检测出错: {e}")
+                    continue
+            
+            # 如果都找不到，检查body元素
+            try:
+                await self.controller.page.wait_for_selector('body', timeout=500)
+                logger.info("页面基本加载完成，但无法确定登录状态")
+                return "未知"
+            except asyncio.TimeoutError:
+                logger.debug("body元素检测超时")
+                return "未知"
+            except Exception as e:
+                logger.debug(f"body元素检测出错: {e}")
+                return "未知"
+                
+        except Exception as e:
+            logger.warning(f"页面状态检测出错: {e}")
+            return "未知"
 
     async def _wait_for_browser_ready(self, timeout: int = DEFAULT_BROWSER_TIMEOUT) -> None:
         """等待浏览器准备就绪"""
