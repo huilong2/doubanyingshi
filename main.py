@@ -14,7 +14,9 @@ if hasattr(sys.stdout, 'reconfigure'):
 else:
     # 对于较老的Python版本，使用flush
     import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
+    # 检查 sys.stdout 是否存在且有 buffer 属性
+    if sys.stdout is not None and hasattr(sys.stdout, 'buffer'):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
 # 强制无缓冲环境变量，确保第三方库输出也实时
 os.environ['PYTHONUNBUFFERED'] = '1'
 from PySide6.QtWidgets import (
@@ -118,6 +120,28 @@ quan_shujuwenjianjia = DATA_DIR
 
 # 默认网站地址
 DEFAULT_URL = "https://www.douban.com/"
+
+# 常量定义
+ACCOUNT_TABLE_COLUMNS = [
+    "选择", "账号", "密码", "CK", "账号昵称", "账号ID", 
+    "登录状态", "主页地址", "登录时间", "代理IP", "运行状态", "备注", "指纹数据"
+]
+
+ACCOUNT_COLUMN_WIDTHS = {
+    0: 50,   # 选择（复选框列）
+    1: 150,  # 账号
+    2: 80,   # 密码
+    3: 80,   # CK
+    4: 120,  # 账号昵称
+    5: 100,  # 账号ID
+    6: 100,  # 登录状态
+    7: 100,  # 主页地址
+    8: 150,  # 登录时间
+    9: 120,  # 代理IP
+    10: 100, # 运行状态
+    11: 80,  # 备注
+    12: 100  # 指纹数据
+}
 
 # BaseDialog 类已移至 ui.dialogs.base_dialog 模块
 
@@ -240,6 +264,38 @@ class AccountManagerWindow(QMainWindow):
                 widget.setReadOnly(kwargs['readonly'])
         return layout, widget
     
+    def _set_row_alignment(self, row):
+        """设置指定行的单元格对齐方式"""
+        for j in range(1, self.account_table.columnCount()):
+            item = self.account_table.item(row, j)
+            if item:
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+    
+    def _set_account_data(self, row, account):
+        """设置账号数据到表格行"""
+        # 账号数据字段映射
+        field_mapping = [
+            (1, account[1] or ''),   # 账号
+            (2, account[2] or ''),   # 密码
+            (3, account[3] or ''),   # CK
+            (4, account[4] or ''),   # 账号昵称
+            (5, account[5] or ''),   # 账号ID
+            (6, account[6] or ''),   # 登录状态
+            (7, account[7] or ''),   # 主页地址
+            (8, account[8] or ''),   # 登录时间
+            (9, account[9] or ''),   # 代理IP
+            (10, account[10] or ''), # 运行状态
+            (11, account[11] or ''), # 备注
+        ]
+        
+        # 设置基本字段
+        for col, value in field_mapping:
+            self.account_table.setItem(row, col, QTableWidgetItem(str(value)))
+        
+        # 设置指纹数据（特殊处理）
+        fingerprint_text = "有指纹" if account[12] else "没有指纹"
+        self.account_table.setItem(row, 12, QTableWidgetItem(fingerprint_text))
+    
     def init_account_tab(self):
         """初始化账号管理标签页"""
         account_tab = QWidget()
@@ -254,30 +310,11 @@ class AccountManagerWindow(QMainWindow):
         account_layout.setContentsMargins(5, 5, 5, 5)
         
         # 账号表格表头设置
-        self.account_table.setColumnCount(13)
-        self.account_table.setHorizontalHeaderLabels([
-            "选择", "账号", "密码", "CK", "账号昵称", "账号ID", 
-            "登录状态", "主页地址", "登录时间", "代理IP", "运行状态", "备注", "指纹数据"
-        ])
+        self.account_table.setColumnCount(len(ACCOUNT_TABLE_COLUMNS))
+        self.account_table.setHorizontalHeaderLabels(ACCOUNT_TABLE_COLUMNS)
         
         # 设置列宽
-        column_widths = {
-            0: 50,   # 选择（复选框列）
-            1: 150,  # 账号
-            2: 80,   # 密码
-            3: 80,   # CK
-            4: 120,  # 账号昵称
-            5: 100,  # 账号ID
-            6: 100,  # 登录状态
-            7: 100,  # 主页地址
-            8: 150,  # 登录时间
-            9: 120,  # 代理IP
-            10: 100, # 运行状态
-            11: 80,  # 备注
-            12: 100  # 指纹数据
-        }
-        
-        for col, width in column_widths.items():
+        for col, width in ACCOUNT_COLUMN_WIDTHS.items():
             self.account_table.setColumnWidth(col, width)
         
         # 设置表格样式优化
@@ -1028,11 +1065,14 @@ class AccountManagerWindow(QMainWindow):
                         success = self.data_manager.update_account_gouxuan(account_id, gouxuan_value)
                         if success:
                             logger.info(f"账号 {account_id} 勾选状态已成功更新为: {gouxuan_value}")
-                            # 强制刷新数据库连接，确保数据已写入
+                                                    # 强制刷新数据库连接，确保数据已写入
+                        try:
                             import sqlite3
                             conn = sqlite3.connect(self.data_manager.db_path)
                             conn.commit()
                             conn.close()
+                        except Exception as e:
+                            logger.warning(f"强制刷新数据库连接失败: {str(e)}")
                         else:
                             logger.error(f"更新账号 {account_id} 勾选状态失败")
                     else:
@@ -1084,8 +1124,9 @@ class AccountManagerWindow(QMainWindow):
         current_check_states = {}
         for row in range(self.account_table.rowCount()):
             checkbox_item = self.account_table.item(row, 0)
-            if checkbox_item:
-                username = self.account_table.item(row, 1).text() if self.account_table.item(row, 1) else None
+            username_item = self.account_table.item(row, 1)
+            if checkbox_item and username_item:
+                username = username_item.text()
                 if username:
                     current_check_states[username] = checkbox_item.checkState()
         
@@ -1115,22 +1156,8 @@ class AccountManagerWindow(QMainWindow):
             checkbox_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.account_table.setItem(i, 0, checkbox_item)
             
-            # 其他列数据（删除分组列）
-            self.account_table.setItem(i, 1, QTableWidgetItem(account[1] or ''))   # 账号
-            self.account_table.setItem(i, 2, QTableWidgetItem(account[2] or ''))   # 密码
-            self.account_table.setItem(i, 3, QTableWidgetItem(account[3] or ''))   # CK
-            self.account_table.setItem(i, 4, QTableWidgetItem(account[4] or ''))   # 账号昵称
-            self.account_table.setItem(i, 5, QTableWidgetItem(account[5] or ''))   # 账号ID
-            self.account_table.setItem(i, 6, QTableWidgetItem(account[6] or ''))   # 登录状态
-            self.account_table.setItem(i, 7, QTableWidgetItem(account[7] or ''))   # 主页地址
-            self.account_table.setItem(i, 8, QTableWidgetItem(account[8] or ''))   # 登录时间
-            self.account_table.setItem(i, 9, QTableWidgetItem(account[9] or ''))   # 代理IP
-            self.account_table.setItem(i, 10, QTableWidgetItem(account[10] or '')) # 运行状态
-            self.account_table.setItem(i, 11, QTableWidgetItem(account[11] or '')) # 备注
-            
-            # 获取并显示指纹数据
-            fingerprint_text = "有指纹" if account[12] else "没有指纹"
-            self.account_table.setItem(i, 12, QTableWidgetItem(fingerprint_text))  # 指纹数据
+            # 设置账号数据
+            self._set_account_data(i, account)
             
             # 保存账号ID到第一列（账号列）的UserRole中
             self.account_table.item(i, 1).setData(Qt.ItemDataRole.UserRole, account[0])
@@ -1140,10 +1167,7 @@ class AccountManagerWindow(QMainWindow):
             self.account_table.setRowHeight(i, 36)
             
             # 设置所有单元格居中对齐（跳过复选框列）
-            for j in range(1, self.account_table.columnCount()):
-                item = self.account_table.item(i, j)
-                if item:
-                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._set_row_alignment(i)
     
     def add_account(self):
         """添加账号"""
