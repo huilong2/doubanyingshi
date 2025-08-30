@@ -311,6 +311,12 @@ class DataManager:
         cursor.execute('SELECT * FROM accounts ORDER BY id')
         accounts = cursor.fetchall()
         conn.close()
+        
+        # 添加调试信息
+        logger.debug(f"获取到 {len(accounts)} 个账号")
+        for i, account in enumerate(accounts[:3]):  # 只显示前3个账号的调试信息
+            logger.debug(f"账号 {i}: ID={account[0]}, 用户名={account[1]}, 勾选状态={account[13] if len(account) > 13 else 'N/A'}")
+        
         return accounts
     
     def add_account(self, account_data):
@@ -402,18 +408,39 @@ class DataManager:
             gouxuan_value: 勾选状态 (0=未勾选, 1=已勾选)
         """
         try:
+            logger.info(f"开始更新账号勾选状态 - ID: {account_id}, 值: {gouxuan_value}")
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
+            
+            # 先检查账号是否存在
+            cursor.execute('SELECT id FROM accounts WHERE id = ?', (account_id,))
+            result = cursor.fetchone()
+            if not result:
+                logger.error(f"账号ID {account_id} 不存在于数据库中")
+                conn.close()
+                return False
             
             cursor.execute('''
             UPDATE accounts SET gouxuan = ? WHERE id = ?
             ''', (gouxuan_value, account_id))
             
+            affected_rows = cursor.rowcount
+            logger.info(f"更新影响行数: {affected_rows}")
+            
             conn.commit()
             conn.close()
-            return True
+            
+            if affected_rows > 0:
+                logger.info(f"成功更新账号 {account_id} 勾选状态为 {gouxuan_value}")
+                return True
+            else:
+                logger.error(f"更新账号 {account_id} 勾选状态失败，没有行被影响")
+                return False
+                
         except Exception as e:
             logger.error(f"更新账号勾选状态失败: {str(e)}")
+            import traceback
+            logger.error(f"详细错误信息: {traceback.format_exc()}")
             return False
     
     def get_account_fingerprint(self, account_id):

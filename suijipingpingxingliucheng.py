@@ -112,13 +112,14 @@ def 随机评论(window=None):
     # 遍历账号列表
     for account in accounts:
         # 解析账号数据
-        # 根据data_manager.py中的accounts表结构，字段顺序为：
+        # 根据database_schema.md中的accounts表结构，字段顺序为：
         # id, username, password, ck, nickname, account_id, login_status, homepage, 
-        # login_time, proxy, running_status, note, gouxuan, zhiwenshuju
+        # login_time, proxy, running_status, note, zhiwenshuju, gouxuan
         account_id, username, password, ck, nickname, account_db_id, login_status, homepage, \
-        login_time, proxy, running_status, note, gouxuan, zhiwenshuju = account
+        login_time, proxy, running_status, note, zhiwenshuju, gouxuan = account
         
         # 检查账号是否勾选
+        print(f"调试: 账号 {username} 的勾选状态 = {gouxuan} (类型: {type(gouxuan)})")
         if gouxuan == 1:  # 账号已勾选
             print(f"正在处理账号: {username}")
             # 在这里执行随机评论操作
@@ -182,7 +183,7 @@ def 执行随机评论操作(username, account, window):
             
             # 尝试从账号的指纹数据中获取user_agent
             user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'  # 默认值
-            if len(account) > 12 and account[12]:  # 检查是否有指纹数据（索引为12的字段）
+            if len(account) > 12 and account[12]:  # 检查是否有指纹数据（索引为12的字段，zhiwenshuju）
                 try:
                     # 解析指纹数据JSON
                     fingerprint_data = json.loads(account[12])

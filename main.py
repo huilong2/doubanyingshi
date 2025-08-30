@@ -169,7 +169,7 @@ class AccountManagerWindow(QMainWindow):
     
     def init_ui(self):
         """初始化主窗口UI"""
-        self.setWindowTitle("豆瓣账号管理系统 - Fluent Design")
+        self.setWindowTitle("豆瓣账号管理系统")
         self.setMinimumSize(1000, 600)
         
         # 设置窗口图标（如果有的话）
@@ -1010,25 +1010,37 @@ class AccountManagerWindow(QMainWindow):
         if column == 0:  # 只有点击复选框列才处理
             item = self.account_table.item(row, 0)
             if item:
-                # 切换复选框状态
+                # 获取当前复选框状态（Qt已自动处理切换）
                 current_state = item.checkState()
-                new_state = Qt.CheckState.Checked if current_state == Qt.CheckState.Unchecked else Qt.CheckState.Unchecked
-                item.setCheckState(new_state)
                 
                 # 更新数据库中的勾选状态
                 try:
                     # 获取账号ID（存储在账号列的UserRole中）
                     account_id = self.account_table.item(row, 1).data(Qt.ItemDataRole.UserRole)
+                    logger.info(f"点击行 {row}，获取到账号ID: {account_id}")
+                    
                     if account_id:
                         # 转换勾选状态为数据库值
-                        gouxuan_value = 1 if new_state == Qt.CheckState.Checked else 0
+                        gouxuan_value = 1 if current_state == Qt.CheckState.Checked else 0
+                        logger.info(f"准备更新账号 {account_id} 勾选状态为: {gouxuan_value}")
+                        
                         # 更新数据库
-                        if self.data_manager.update_account_gouxuan(account_id, gouxuan_value):
-                            logger.debug(f"账号 {account_id} 勾选状态已更新为: {gouxuan_value}")
+                        success = self.data_manager.update_account_gouxuan(account_id, gouxuan_value)
+                        if success:
+                            logger.info(f"账号 {account_id} 勾选状态已成功更新为: {gouxuan_value}")
+                            # 强制刷新数据库连接，确保数据已写入
+                            import sqlite3
+                            conn = sqlite3.connect(self.data_manager.db_path)
+                            conn.commit()
+                            conn.close()
                         else:
                             logger.error(f"更新账号 {account_id} 勾选状态失败")
+                    else:
+                        logger.error(f"行 {row} 的账号ID为空")
                 except Exception as e:
                     logger.error(f"处理账号勾选状态更新时出错: {str(e)}")
+                    import traceback
+                    logger.error(f"详细错误信息: {traceback.format_exc()}")
     
     def get_selected_accounts(self):
         """获取所有选中的账号"""
@@ -1068,6 +1080,15 @@ class AccountManagerWindow(QMainWindow):
     
     def load_accounts(self):
         """加载账号数据"""
+        # 保存当前的勾选状态
+        current_check_states = {}
+        for row in range(self.account_table.rowCount()):
+            checkbox_item = self.account_table.item(row, 0)
+            if checkbox_item:
+                username = self.account_table.item(row, 1).text() if self.account_table.item(row, 1) else None
+                if username:
+                    current_check_states[username] = checkbox_item.checkState()
+        
         accounts = self.data_manager.get_accounts()
         self.account_table.setRowCount(len(accounts))
 
@@ -1076,9 +1097,21 @@ class AccountManagerWindow(QMainWindow):
             
             # 第一列添加复选框
             checkbox_item = QTableWidgetItem()
-            # 恢复之前保存的勾选状态（account[13]是gouxuan字段）
-            gouxuan_state = account[13] if len(account) > 13 else 0
-            checkbox_item.setCheckState(Qt.CheckState.Checked if gouxuan_state == 1 else Qt.CheckState.Unchecked)
+            # 设置项目可勾选
+            checkbox_item.setFlags(checkbox_item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            
+            # 优先使用当前界面的勾选状态，如果没有则使用数据库中的状态
+            username = account[1] if len(account) > 1 else None
+            if username and username in current_check_states:
+                # 使用当前界面的勾选状态
+                checkbox_item.setCheckState(current_check_states[username])
+                logger.debug(f"行 {i} 使用界面勾选状态: {current_check_states[username]}")
+            else:
+                # 使用数据库中的勾选状态
+                gouxuan_state = account[13] if len(account) > 13 else 0
+                checkbox_item.setCheckState(Qt.CheckState.Checked if gouxuan_state == 1 else Qt.CheckState.Unchecked)
+                logger.debug(f"行 {i} 使用数据库勾选状态: {gouxuan_state}")
+            
             checkbox_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.account_table.setItem(i, 0, checkbox_item)
             
@@ -1101,6 +1134,7 @@ class AccountManagerWindow(QMainWindow):
             
             # 保存账号ID到第一列（账号列）的UserRole中
             self.account_table.item(i, 1).setData(Qt.ItemDataRole.UserRole, account[0])
+            logger.debug(f"行 {i} 设置账号ID: {account[0]} 到UserRole")
             
             # 设置行高
             self.account_table.setRowHeight(i, 36)
